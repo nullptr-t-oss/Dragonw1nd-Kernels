@@ -34,6 +34,8 @@ outputs:
     value: ${{ steps.hash.outputs.system_dlkm_sha256 }}
   vendor_dlkm_sha256:
     value: ${{ steps.hash.outputs.vendor_dlkm_sha256 }}
+  vendor_boot_sha256:
+    value: ${{ steps.hash.outputs.vendor_boot_sha256 }}
   zip_name:
     value: ${{ steps.create_ak3_zip.outputs.zip_name }}
 

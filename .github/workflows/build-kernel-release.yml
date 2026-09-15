@@ -217,6 +217,13 @@ jobs:
           fi
           echo "short_sha=$(echo '${{ github.sha }}' | cut -c1-7)" >> "${GITHUB_OUTPUT}"
 
+      - name: Track build start time
+        if: steps.tg_check.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "BUILD_START_HUMAN=$(date -u +'%Y-%m-%d %H:%M UTC')" >> "${GITHUB_ENV}"
+
       - name: Start local Telegram Bot API server
         id: tg_server
         if: steps.tg_check.outputs.enabled == 'true'
@@ -253,6 +260,23 @@ jobs:
           echo "::warning::Local Bot API server did not become ready in time — notifications will be skipped for this run."
           echo "enabled=false" >> "${GITHUB_OUTPUT}"
 
+      - name: Build "started" message
+        id: msg_started
+        if: steps.tg_check.outputs.enabled == 'true' && steps.tg_server.outputs.api_base != ''
+        shell: bash
+        env:
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          PRODUCT: ${{ matrix.product }}
+          MANIFEST: ${{ inputs.manifest }}
+          OPTIMIZE_LEVEL: ${{ inputs.optimize_level }}
+          LTO: ${{ inputs.lto }}
+        run: |
+          {
+            echo "text<<TGMSG_EOF"
+            bash .github/telegram/build_message.sh started
+            echo "TGMSG_EOF"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Notify - Build Started
         if: steps.tg_check.outputs.enabled == 'true' && steps.tg_server.outputs.api_base != ''
         uses: ./.github/telegram
@@ -262,22 +286,7 @@ jobs:
           thread_id: ${{ steps.tg_thread.outputs.thread_id }}
           api_base_url: ${{ steps.tg_server.outputs.api_base }}
           mode: rich
-          message: |
-            # Build Started
-            ##### Release type : ${{ inputs.release_type }}
-            <footer>Triggered by ${{ github.actor }}</footer>
-
-            ---
-
-            | Device | ${{ matrix.product }} |
-            | --- | --- |
-            | Branch | ${{ github.ref_name }} |
-            | Manifest | ${{ inputs.manifest }} |
-            | Optimization | ${{ inputs.optimize_level }} |
-            | LTO | ${{ inputs.lto }} |
-
-            > Commit: [${{ steps.tg_thread.outputs.short_sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) <br>
-            > Run: [#${{ github.run_number }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          message: ${{ steps.msg_started.outputs.text }}
 
       - name: Setup Build Environment
         id: setup_env
@@ -338,6 +347,12 @@ jobs:
           tg_thread_id: ${{ steps.tg_thread.outputs.thread_id }}
           tg_api_base: ${{ steps.tg_server.outputs.api_base }}
           tg_send_debug: ${{ inputs.release_type == 'none' }}
+          kernel_sha256: ${{ steps.build.outputs.kernel_sha256 }}
+          boot_sha256: ${{ steps.build.outputs.boot_sha256 }}
+          system_dlkm_sha256: ${{ steps.build.outputs.system_dlkm_sha256 }}
+          vendor_boot_sha256: ${{ steps.build.outputs.vendor_boot_sha256 }}
+          vendor_dlkm_sha256: ${{ steps.build.outputs.vendor_dlkm_sha256 }}
+          build_start_human: ${{ env.BUILD_START_HUMAN }}
 
       - name: Check for failure (if applicable)
         id: tg_fail_stage
@@ -368,6 +383,22 @@ jobs:
           echo "reason=$REASON" >> "${GITHUB_OUTPUT}"
           echo "emoji=$EMOJI" >> "${GITHUB_OUTPUT}"
 
+      - name: Build "failed" message
+        id: msg_failed
+        if: (failure() || cancelled()) && steps.tg_check.outputs.enabled == 'true'
+        shell: bash
+        env:
+          PRODUCT: ${{ matrix.product }}
+          FAIL_EMOJI: ${{ steps.tg_fail_stage.outputs.emoji }}
+          FAIL_REASON: ${{ steps.tg_fail_stage.outputs.reason }}
+          FAIL_STAGE: ${{ steps.tg_fail_stage.outputs.stage }}
+        run: |
+          {
+            echo "text<<TGMSG_EOF"
+            bash .github/telegram/build_message.sh failed
+            echo "TGMSG_EOF"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Notify - Build Failed
         if: (failure() || cancelled()) && steps.tg_check.outputs.enabled == 'true'
         uses: ./.github/telegram
@@ -377,18 +408,7 @@ jobs:
           thread_id: ${{ steps.tg_thread.outputs.thread_id }}
           api_base_url: ${{ steps.tg_server.outputs.api_base }}
           mode: rich
-          message: |
-            # ${{ steps.tg_fail_stage.outputs.emoji }} Build ${{ steps.tg_fail_stage.outputs.reason }}
-
-            | Device | ${{ matrix.product }} |
-            | --- | --- |
-            | Stage | ${{ steps.tg_fail_stage.outputs.stage }} |
-
-            > Branch: ${{ github.ref_name }} <br>
-            > Triggered by: ${{ github.actor }}
-
-            > Commit: [${{ steps.tg_thread.outputs.short_sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) <br>
-            > Run: [#${{ github.run_number }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          message: ${{ steps.msg_failed.outputs.text }}
 
       - name: Stop local Telegram Bot API server
         if: always() && steps.tg_check.outputs.enabled == 'true'

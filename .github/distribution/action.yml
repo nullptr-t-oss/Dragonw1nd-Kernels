@@ -29,6 +29,31 @@ inputs:
     required: false
     type: string
     default: 'true'
+  kernel_sha256:
+    required: false
+    type: string
+    default: ''
+  boot_sha256:
+    required: false
+    type: string
+    default: ''
+  system_dlkm_sha256:
+    required: false
+    type: string
+    default: ''
+  vendor_boot_sha256:
+    required: false
+    type: string
+    default: ''
+  vendor_dlkm_sha256:
+    required: false
+    type: string
+    default: ''
+  build_start_human:
+    description: 'Human-readable build start time, set by the calling workflow'
+    required: false
+    type: string
+    default: ''
 
 runs:
   using: composite
@@ -50,6 +75,24 @@ runs:
         ( cd "${DIST_DIR}" && zip -r9 "${DEBUG_ZIP}" ./* >/dev/null )
         echo "zip_path=${DEBUG_ZIP}" >> "${GITHUB_OUTPUT}"
 
+    - name: Build "success" message
+      id: msg_success
+      if: ${{ inputs.tg_enabled == 'true' }}
+      shell: bash
+      env:
+        KERNEL_SHA256: ${{ inputs.kernel_sha256 }}
+        BOOT_SHA256: ${{ inputs.boot_sha256 }}
+        SYSTEM_DLKM_SHA256: ${{ inputs.system_dlkm_sha256 }}
+        VENDOR_BOOT_SHA256: ${{ inputs.vendor_boot_sha256 }}
+        VENDOR_DLKM_SHA256: ${{ inputs.vendor_dlkm_sha256 }}
+        BUILD_START_HUMAN: ${{ inputs.build_start_human }}
+      run: |
+        {
+          echo "text<<TGMSG_EOF"
+          bash .github/telegram/build_message.sh success
+          echo "TGMSG_EOF"
+        } >> "${GITHUB_OUTPUT}"
+
     - name: Upload modules artifacts
       if: ${{ inputs.tg_enabled == 'true' }}
       uses: ./.github/telegram
@@ -70,10 +113,7 @@ runs:
           ${{ env.DIST_DIR }}/system_dlkm.img
           ${{ env.DIST_DIR }}/vendor_boot.img
           ${{ env.DIST_DIR }}/vendor_dlkm.img
-        message: |
-          # DIST_DIR artifacts
-
-          > Device: ${{ env.PRODUCT }}
+        message: ${{ steps.msg_success.outputs.text }}
 
     - name: Upload debug artifacts to Telegram
       if: ${{ inputs.tg_enabled == 'true' && inputs.tg_send_debug == 'true' && steps.tg_debug_zip.outputs.zip_path != '' }}
