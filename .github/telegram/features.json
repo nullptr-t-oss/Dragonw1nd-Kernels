@@ -1,0 +1,32 @@
+{
+  "categories": {
+    "Wireless Drivers": {
+      "realtek": {
+        "name": "Realtek WLAN",
+        "description": "CONFIG_WLAN_VENDOR_REALTEK, plus the out-of-tree rtw88 driver built as a module."
+      },
+      "ralink": {
+        "name": "Ralink / MediaTek USB (rt2x00)",
+        "description": "RT2800USB family (RT33XX/35XX/3573/53XX/55XX) built as modules."
+      },
+      "ath": {
+        "name": "Atheros WLAN",
+        "description": "ATH9K, ATH9K_HTC and ATH10K (incl. USB) built as modules."
+      },
+      "mediatek": {
+        "name": "MediaTek WLAN (mt76)",
+        "description": "Full mt76 family: MT7601U through MT7921E, USB and SDIO variants."
+      }
+    },
+    "Networking": {
+      "can_slcan": {
+        "name": "CAN SLCAN",
+        "description": "Serial-line CAN driver, built as a module."
+      },
+      "mac80211_extras": {
+        "name": "mac80211 extras",
+        "description": "LED triggers and Minstrel rate control for mac80211-based drivers."
+      }
+    }
+  }
+}

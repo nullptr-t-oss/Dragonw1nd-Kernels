@@ -176,6 +176,7 @@ jobs:
       ksun_version: ${{ steps._kernel.outputs.ksun_version }}
       ksun_tag: ${{ steps._kernel.outputs.ksun_tag }}
       susfs_version: ${{ steps._kernel.outputs.susfs_version }}
+      features: ${{ steps._modules.outputs.features }}
       kernel_sha256: ${{ steps.build.outputs.kernel_sha256 }}
       boot_sha256: ${{ steps.build.outputs.boot_sha256 }}
       system_dlkm_sha256: ${{ steps.build.outputs.system_dlkm_sha256 }}
@@ -210,7 +211,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ inputs.release_type }}" != "none" ]; then
+          if [ "${{ inputs.release_type }}" == "Release" ]; then
             echo "thread_id=${{ vars.TG_THREAD_RELEASE }}" >> "${GITHUB_OUTPUT}"
           else
             echo "thread_id=${{ vars.TG_THREAD_DEV }}" >> "${GITHUB_OUTPUT}"
@@ -222,7 +223,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "BUILD_START_HUMAN=$(date -u +'%Y-%m-%d %H:%M UTC')" >> "${GITHUB_ENV}"
+          echo "BUILD_START=$(date +%s)" >> "${GITHUB_ENV}"
 
       - name: Start local Telegram Bot API server
         id: tg_server
@@ -259,34 +260,6 @@ jobs:
           done
           echo "::warning::Local Bot API server did not become ready in time — notifications will be skipped for this run."
           echo "enabled=false" >> "${GITHUB_OUTPUT}"
-
-      - name: Build "started" message
-        id: msg_started
-        if: steps.tg_check.outputs.enabled == 'true' && steps.tg_server.outputs.api_base != ''
-        shell: bash
-        env:
-          RELEASE_TYPE: ${{ inputs.release_type }}
-          PRODUCT: ${{ matrix.product }}
-          MANIFEST: ${{ inputs.manifest }}
-          OPTIMIZE_LEVEL: ${{ inputs.optimize_level }}
-          LTO: ${{ inputs.lto }}
-        run: |
-          {
-            echo "text<<TGMSG_EOF"
-            bash .github/telegram/build_message.sh started
-            echo "TGMSG_EOF"
-          } >> "${GITHUB_OUTPUT}"
-
-      - name: Notify - Build Started
-        if: steps.tg_check.outputs.enabled == 'true' && steps.tg_server.outputs.api_base != ''
-        uses: ./.github/telegram
-        with:
-          bot_token: ${{ secrets.TG_BOT_TOKEN }}
-          chat_id: ${{ vars.TG_CHAT_ID }}
-          thread_id: ${{ steps.tg_thread.outputs.thread_id }}
-          api_base_url: ${{ steps.tg_server.outputs.api_base }}
-          mode: rich
-          message: ${{ steps.msg_started.outputs.text }}
 
       - name: Setup Build Environment
         id: setup_env
@@ -347,68 +320,13 @@ jobs:
           tg_thread_id: ${{ steps.tg_thread.outputs.thread_id }}
           tg_api_base: ${{ steps.tg_server.outputs.api_base }}
           tg_send_debug: ${{ inputs.release_type == 'none' }}
-          kernel_sha256: ${{ steps.build.outputs.kernel_sha256 }}
-          boot_sha256: ${{ steps.build.outputs.boot_sha256 }}
-          system_dlkm_sha256: ${{ steps.build.outputs.system_dlkm_sha256 }}
-          vendor_boot_sha256: ${{ steps.build.outputs.vendor_boot_sha256 }}
-          vendor_dlkm_sha256: ${{ steps.build.outputs.vendor_dlkm_sha256 }}
-          build_start_human: ${{ env.BUILD_START_HUMAN }}
-
-      - name: Check for failure (if applicable)
-        id: tg_fail_stage
-        if: (failure() || cancelled()) && steps.tg_check.outputs.enabled == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          STAGE="Unknown stage"
-          REASON="Failed"
-          EMOJI="❌"
-
-          SETUP_ENV_OUTCOME="${{ steps.setup_env.outcome }}"
-          BUILD_KERNEL_OUTCOME="${{ steps.build_kernel.outcome }}"
-          BUILD_MODULES_OUTCOME="${{ steps.build_modules.outcome }}"
-
-          if [ "$SETUP_ENV_OUTCOME" == "failure" ] || [ "$SETUP_ENV_OUTCOME" == "cancelled" ]; then
-            STAGE="Environment Setup"
-            [ "$SETUP_ENV_OUTCOME" == "cancelled" ] && { REASON="Cancelled"; EMOJI="🚫"; }
-          elif [ "$BUILD_KERNEL_OUTCOME" == "failure" ] || [ "$BUILD_KERNEL_OUTCOME" == "cancelled" ]; then
-            STAGE="Kernel Build"
-            [ "$BUILD_KERNEL_OUTCOME" == "cancelled" ] && { REASON="Cancelled"; EMOJI="🚫"; }
-          elif [ "$BUILD_MODULES_OUTCOME" == "failure" ] || [ "$BUILD_MODULES_OUTCOME" == "cancelled" ]; then
-            STAGE="Kernel Modules Build"
-            [ "$BUILD_MODULES_OUTCOME" == "cancelled" ] && { REASON="Cancelled"; EMOJI="🚫"; }
-          fi
-
-          echo "stage=$STAGE" >> "${GITHUB_OUTPUT}"
-          echo "reason=$REASON" >> "${GITHUB_OUTPUT}"
-          echo "emoji=$EMOJI" >> "${GITHUB_OUTPUT}"
-
-      - name: Build "failed" message
-        id: msg_failed
-        if: (failure() || cancelled()) && steps.tg_check.outputs.enabled == 'true'
-        shell: bash
-        env:
-          PRODUCT: ${{ matrix.product }}
-          FAIL_EMOJI: ${{ steps.tg_fail_stage.outputs.emoji }}
-          FAIL_REASON: ${{ steps.tg_fail_stage.outputs.reason }}
-          FAIL_STAGE: ${{ steps.tg_fail_stage.outputs.stage }}
-        run: |
-          {
-            echo "text<<TGMSG_EOF"
-            bash .github/telegram/build_message.sh failed
-            echo "TGMSG_EOF"
-          } >> "${GITHUB_OUTPUT}"
-
-      - name: Notify - Build Failed
-        if: (failure() || cancelled()) && steps.tg_check.outputs.enabled == 'true'
-        uses: ./.github/telegram
-        with:
-          bot_token: ${{ secrets.TG_BOT_TOKEN }}
-          chat_id: ${{ vars.TG_CHAT_ID }}
-          thread_id: ${{ steps.tg_thread.outputs.thread_id }}
-          api_base_url: ${{ steps.tg_server.outputs.api_base }}
-          mode: rich
-          message: ${{ steps.msg_failed.outputs.text }}
+          release_type: ${{ inputs.release_type }}
+          lto: ${{ inputs.lto }}
+          optimize_level: ${{ inputs.optimize_level }}
+          kernel_uname: ${{ inputs.kernel_uname }}
+          ksun_version: ${{ steps._kernel.outputs.ksun_version }}
+          build_start: ${{ env.BUILD_START }}
+          features: ${{ steps._modules.outputs.features }}
 
       - name: Stop local Telegram Bot API server
         if: always() && steps.tg_check.outputs.enabled == 'true'
@@ -493,84 +411,52 @@ jobs:
         with:
           path: ./downloaded-artifacts
 
+      - name: Export device config to env
+        shell: bash
+        run: |
+          set -euo pipefail
+          CODENAME="${{ needs.build.outputs.codename }}"
+          CONFIG_FILE=$(grep -l "\"codename\": *\"${CODENAME}\"" configs/*.json | head -n1)
+          if [ -z "${CONFIG_FILE}" ]; then
+            echo "::warning::No configs/*.json matched codename '${CODENAME}' — release notes will be missing device-config fields (SOC, MODEL, etc)."
+            exit 0
+          fi
+          jq -r 'to_entries[] | select(.value | type == "string" or type == "number" or type == "boolean") | "\(.key | ascii_upcase)=\(.value)"' "${CONFIG_FILE}" >> "${GITHUB_ENV}"
+          echo "Exported device config from ${CONFIG_FILE}"
+
       - name: Generate Device List and Final Release Notes
         id: generate-notes
+        env:
+          PRODUCT: ${{ needs.build.outputs.product }}
         run: |
-          echo "=== Start building the release notes ==="
-          
+          set -euo pipefail
+          IFS=',' read -ra FEATURES <<< "${{ needs.build.outputs.features }}"
+          FEAT_ARGS=()
+          for f in "${FEATURES[@]}"; do
+            [ -n "$f" ] && FEAT_ARGS+=(--feat "$f")
+          done
+
+          FILE_ARGS=()
+          for f in ./downloaded-artifacts/*/*.{zip,img}; do
+            [ -f "$f" ] && FILE_ARGS+=(--file "$f")
+          done
+
+          SUSFS_ARGS=()
           if [[ -n "${{ needs.build.outputs.susfs_version }}" ]]; then
-            cat << EOF > release_notes.md
-          This release contains KernelSU Next ${{ needs.build.outputs.ksun_tag }}, Nethunter and SUSFS ${{ needs.build.outputs.susfs_version }}
-
-          Module:
-          -> https://github.com/sidex15/ksu_module_susfs
-          EOF
-          else
-            cat << EOF > release_notes.md
-          This release contains KernelSU Next ${{ needs.build.outputs.ksun_tag }} & Nethunter
-          EOF
+            SUSFS_ARGS=(--susfs-version "${{ needs.build.outputs.susfs_version }}")
           fi
 
-          cat << EOF >> release_notes.md
+          python3 .github/telegram/release_readme.py \
+            --release-type "${{ inputs.release_type }}" \
+            --os "${{ needs.build.outputs.os }}" \
+            --kernel-version "${{ needs.build.outputs.kernel_version }}" \
+            --ksun-tag "${{ needs.build.outputs.ksun_tag }}" \
+            --ksun-version "${{ needs.build.outputs.ksun_version }}" \
+            "${SUSFS_ARGS[@]}" \
+            "${FEAT_ARGS[@]}" \
+            "${FILE_ARGS[@]}" \
+            --out release_notes.md
 
-          Official Managers:
-          -> https://github.com/KernelSU-Next/KernelSU-Next  
-
-          ### Built Device
-
-          | Model | Kernel Version |
-          |-------|----------------|
-          EOF
-
-
-          model=${{ needs.build.outputs.product }}
-          version=${{ needs.build.outputs.kernel_version }}
-          printf "| %-12s | %-16s |\n" "$model" "$version" >> release_notes.md
-
-          # Add features and finalize
-          cat << EOF >> release_notes.md
-
-          ### Features
-          - [+] KernelSU-Next ${{ needs.build.outputs.ksun_tag }} ( ${{ needs.build.outputs.ksun_version }} )
-          EOF
-
-          if [[ -n "${{ needs.build.outputs.susfs_version }}" ]]; then
-            cat << EOF >> release_notes.md
-          - [+] SUSFS ${{ needs.build.outputs.susfs_version }}
-          EOF
-          fi
-
-          cat << EOF >> release_notes.md
-          - [+] Wireguard Support
-          - [+] Magic Mount Support
-          - [+] Ptrace message leak fix for kernels < 5.16
-          - [+] Manual Hooks [scope_min_manual_hooks_v1.4]
-          - [+] CONFIG_TMPFS_XATTR Support [Mountify Support]
-          - [+] BBR v1 Support
-          - [+] Baseband Guard Support (BBG)
-          - [+] Nethunter Support
-          - [+] Mem kernel driver by @Poko-Apps [r/w to physical memory]
-          - [+] IP Set Support
-
-          > [!NOTE]
-          > Some features might vary depending on the model due to compatibility issues
-
-          > [!IMPORTANT]
-          > Codename: ${{ needs.build.outputs.codename }}
-          > Supported OS version: ${{ needs.build.outputs.os }}
-          > Kernel Image hash : ${{ needs.build.outputs.kernel_sha256 }}
-          > boot.img hash : ${{ needs.build.outputs.boot_sha256 }}
-          EOF
-
-          if [[ "${{ inputs.compile_dlkm }}" == "true" ]]; then
-            cat << EOF >> release_notes.md
-          > system_dlkm.img hash : ${{ needs.build.outputs.system_dlkm_sha256 }}
-          > vendor_boot.img hash : ${{ needs.build.outputs.vendor_boot_sha256 }}
-          > vendor_dlkm.img hash : ${{ needs.build.outputs.vendor_dlkm_sha256 }}
-          EOF
-          fi
-
-          # Output for debugging
           echo "--- Final Release Notes ---"
           cat release_notes.md
 

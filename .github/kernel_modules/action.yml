@@ -1,6 +1,11 @@
 name: Build kernel modules
 description: "Builds Kernel modules and dtbs"
 
+outputs:
+  features:
+    description: 'Comma-separated feature ids (matching .github/telegram/features.json) for the drivers this action enables'
+    value: ${{ steps.config_features.outputs.features }}
+
 runs:
   using: composite
   steps:
@@ -18,6 +23,7 @@ runs:
         touch arch/arm64/configs/modules.config
 
     - name: Add nethunter specfic drivers already present in kernel to be built as modules
+      id: config_features
       shell: bash
       run: |
         set -euo pipefail
@@ -83,6 +89,13 @@ runs:
           -e CONFIG_MAC80211_LEDS \
           -e CONFIG_MAC80211_RC_MINSTREL \
           -m CONFIG_CAN_SLCAN
+
+        # Feature-id list for build notifications (.github/telegram/features.json
+        # keys) — kept right here, next to the config commands that actually
+        # enable these drivers, instead of duplicated in the notification code.
+        # If this action grows real per-build toggles later, this line becomes
+        # conditional instead of static — nothing downstream needs to change.
+        echo "features=realtek,ralink,ath,mediatek,can_slcan,mac80211_extras" >> "${GITHUB_OUTPUT}"
 
     - name: Add my kernel patches to msm kernel
       shell: bash

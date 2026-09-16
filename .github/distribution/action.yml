@@ -29,28 +29,33 @@ inputs:
     required: false
     type: string
     default: 'true'
-  kernel_sha256:
+  release_type:
+    required: false
+    type: string
+    default: 'none'
+  lto:
     required: false
     type: string
     default: ''
-  boot_sha256:
+  optimize_level:
     required: false
     type: string
     default: ''
-  system_dlkm_sha256:
+  kernel_uname:
     required: false
     type: string
     default: ''
-  vendor_boot_sha256:
+  ksun_version:
     required: false
     type: string
     default: ''
-  vendor_dlkm_sha256:
+  build_start:
+    description: 'Unix epoch seconds when the build started (from the calling workflow)'
     required: false
     type: string
     default: ''
-  build_start_human:
-    description: 'Human-readable build start time, set by the calling workflow'
+  features:
+    description: 'Comma-separated feature ids, from kernel_modules/action.yml output'
     required: false
     type: string
     default: ''
@@ -75,60 +80,65 @@ runs:
         ( cd "${DIST_DIR}" && zip -r9 "${DEBUG_ZIP}" ./* >/dev/null )
         echo "zip_path=${DEBUG_ZIP}" >> "${GITHUB_OUTPUT}"
 
-    - name: Build "success" message
-      id: msg_success
+    - name: Send build notification
       if: ${{ inputs.tg_enabled == 'true' }}
       shell: bash
       env:
-        KERNEL_SHA256: ${{ inputs.kernel_sha256 }}
-        BOOT_SHA256: ${{ inputs.boot_sha256 }}
-        SYSTEM_DLKM_SHA256: ${{ inputs.system_dlkm_sha256 }}
-        VENDOR_BOOT_SHA256: ${{ inputs.vendor_boot_sha256 }}
-        VENDOR_DLKM_SHA256: ${{ inputs.vendor_dlkm_sha256 }}
-        BUILD_START_HUMAN: ${{ inputs.build_start_human }}
+        TELEGRAM_BOT_TOKEN: ${{ inputs.tg_bot_token }}
+        TELEGRAM_CHAT_ID: ${{ inputs.tg_chat_id }}
+        TELEGRAM_THREAD_ID: ${{ inputs.tg_thread_id }}
+        TELEGRAM_API_BASE: ${{ inputs.tg_api_base }}
       run: |
-        {
-          echo "text<<TGMSG_EOF"
-          bash .github/telegram/build_message.sh success
-          echo "TGMSG_EOF"
-        } >> "${GITHUB_OUTPUT}"
+        set -euo pipefail
+        IFS=',' read -ra FEATURES <<< "${{ inputs.features }}"
+        FEAT_ARGS=()
+        for f in "${FEATURES[@]}"; do
+          [ -n "$f" ] && FEAT_ARGS+=(--feat "$f")
+        done
 
-    - name: Upload modules artifacts
-      if: ${{ inputs.tg_enabled == 'true' }}
-      uses: ./.github/telegram
-      with:
-        bot_token: ${{ inputs.tg_bot_token }}
-        chat_id: ${{ inputs.tg_chat_id }}
-        thread_id: ${{ inputs.tg_thread_id }}
-        api_base_url: ${{ inputs.tg_api_base }}
-        mode: rich-with-file
-        files: |
-          ${{ env.DIST_DIR }}/${{ env.AK3_ZIP }}
-          ${{ env.DIST_DIR }}/boot.img
-          ${{ env.DIST_DIR }}/ksun.apk
-          ${{ env.DIST_DIR }}/ksun_spoofed.apk
-          ${{ env.DIST_DIR }}/modules.zip
-          ${{ env.DIST_DIR }}/gki-modules.tar.gz
-          ${{ env.DIST_DIR }}/modules.tar.gz
-          ${{ env.DIST_DIR }}/system_dlkm.img
-          ${{ env.DIST_DIR }}/vendor_boot.img
-          ${{ env.DIST_DIR }}/vendor_dlkm.img
-        message: ${{ steps.msg_success.outputs.text }}
+        FILE_ARGS=()
+        for f in \
+          "${DIST_DIR}/${AK3_ZIP}" \
+          "${DIST_DIR}/boot.img" \
+          "${DIST_DIR}/ksun.apk" \
+          "${DIST_DIR}/ksun_spoofed.apk" \
+          "${DIST_DIR}/modules.zip" \
+          "${DIST_DIR}/gki-modules.tar.gz" \
+          "${DIST_DIR}/modules.tar.gz" \
+          "${DIST_DIR}/system_dlkm.img" \
+          "${DIST_DIR}/vendor_boot.img" \
+          "${DIST_DIR}/vendor_dlkm.img"; do
+          [ -f "$f" ] && FILE_ARGS+=(--file "$f")
+        done
+
+        python3 "${{ github.action_path }}/../telegram/telegram.py" \
+          --product "${PRODUCT}" \
+          --release-type "${{ inputs.release_type }}" \
+          --lto "${{ inputs.lto }}" \
+          --optimize-level "${{ inputs.optimize_level }}" \
+          --kernel-uname "${{ inputs.kernel_uname }}" \
+          --ksun-version "${{ inputs.ksun_version }}" \
+          --build-start "${{ inputs.build_start }}" \
+          "${FEAT_ARGS[@]}" \
+          "${FILE_ARGS[@]}"
 
     - name: Upload debug artifacts to Telegram
       if: ${{ inputs.tg_enabled == 'true' && inputs.tg_send_debug == 'true' && steps.tg_debug_zip.outputs.zip_path != '' }}
-      uses: ./.github/telegram
-      with:
-        bot_token: ${{ inputs.tg_bot_token }}
-        chat_id: ${{ inputs.tg_chat_id }}
-        thread_id: ${{ inputs.tg_thread_id }}
-        api_base_url: ${{ inputs.tg_api_base }}
-        mode: rich-with-file
-        files: |
-          ${{ steps.tg_debug_zip.outputs.zip_path }}
-        message: |
-          # Debug Artifacts
-
-          | Model | ${{ env.PRODUCT }} |
-          | --- | --- |
-          | Build time | ${{ env.BUILD_TIME }} |
+      shell: bash
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ inputs.tg_bot_token }}
+        TELEGRAM_CHAT_ID: ${{ inputs.tg_chat_id }}
+        TELEGRAM_THREAD_ID: ${{ inputs.tg_thread_id }}
+        TELEGRAM_API_BASE: ${{ inputs.tg_api_base }}
+      run: |
+        set -euo pipefail
+        python3 "${{ github.action_path }}/../telegram/telegram.py" \
+          --product "${PRODUCT}" \
+          --release-type "${{ inputs.release_type }}" \
+          --lto "${{ inputs.lto }}" \
+          --optimize-level "${{ inputs.optimize_level }}" \
+          --kernel-uname "${{ inputs.kernel_uname }}" \
+          --ksun-version "${{ inputs.ksun_version }}" \
+          --build-start "${{ inputs.build_start }}" \
+          --debug-bundle \
+          --file "${{ steps.tg_debug_zip.outputs.zip_path }}"
