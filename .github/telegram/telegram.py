@@ -62,6 +62,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--kernel-uname", default="")
     p.add_argument("--ksun-version", default="")
     p.add_argument("--release-type", default="none", choices=list(RELEASE_CHIP.keys()))
+    p.add_argument("--release-tag", default="", help="e.g. salami-oos16-r7. Shown on the release chip instead of the category label when release-type is Pre-release/Release.")
+    p.add_argument("--ksun-commit-url", default="", help="If set, the KSU version cell becomes a clickable chip linking here.")
 
     p.add_argument("--build-start", type=int, required=True, help="Unix epoch seconds when the build started.")
     p.add_argument("--debug-bundle", action="store_true", help="Minimal message: heading, info table, the attached file(s), build time — no banner/release-chip/feature-tree. For internal debug-archive pings, not the main release message.")
@@ -82,8 +84,10 @@ def lto_chip(lto: str) -> str:
     return f'<tg-button type="disabled"{style_attr}>{html.escape(label)}</tg-button>'
 
 
-def release_chip(release_type: str) -> str:
+def release_chip(release_type: str, release_tag: str) -> str:
     label, style = RELEASE_CHIP.get(release_type, (release_type, ""))
+    if release_tag and release_type in ("Pre-release", "Release"):
+        label = release_tag
     return f'<tg-button type="disabled" style="{style}">{html.escape(label)}</tg-button>'
 
 
@@ -118,15 +122,23 @@ def build_files_block(entries: list[bi.FileEntry]) -> tuple[str, list[dict], dic
     return "\n\n".join(lines), media, attach_paths
 
 
+def ksu_cell(ksun_version: str, commit_url: str) -> str:
+    label = html.escape(ksun_version or "N/A")
+    if not commit_url:
+        return label
+    return f'<tg-button type="url" style="primary" url="{commit_url}">{label}</tg-button>'
+
+
 def build_info_table(args: argparse.Namespace) -> str:
-    return "\n".join([
-        f'| {html.escape(args.product)} | |',
-        "| --- | --- |",
-        f"| LTO | {lto_chip(args.lto)} |",
-        f"| Optimization | {html.escape(args.optimize_level or 'N/A')} |",
-        f"| Kernel | {html.escape(args.kernel_uname or 'N/A')} |",
-        f"| KSU | {html.escape(args.ksun_version or 'N/A')} |",
-    ])
+    rows = [
+        ("LTO", lto_chip(args.lto)),
+        ("Optimization", html.escape(args.optimize_level or "N/A")),
+        ("Kernel", html.escape(args.kernel_uname or "N/A")),
+        ("KSU", ksu_cell(args.ksun_version, args.ksun_commit_url)),
+    ]
+    body = "".join(f"<tr><td>{label}</td><td>{value}</td></tr>" for label, value in rows)
+    header = f'<tr><th colspan="2" align="center">{html.escape(args.product)}</th></tr>'
+    return f"<table bordered>{header}{body}</table>"
 
 
 def build_nav_buttons(ctx: bi.GitHubContext) -> str:
@@ -137,7 +149,9 @@ def build_nav_buttons(ctx: bi.GitHubContext) -> str:
         "</tg-button-row>",
         "<tg-button-row>",
         f'  <tg-button type="url" style="primary" url="{GITHUB_PROFILE_URL}">Follow on GitHub</tg-button>',
-        f'  <tg-button type="url" style="primary" url="{PROJECT_URL}">\u2b50 Star this project</tg-button>',
+        "</tg-button-row>",
+        "<tg-button-row>",
+        f'  <tg-button type="url" style="primary" url="{PROJECT_URL}">Star this project</tg-button>',
         "</tg-button-row>",
     ])
 
@@ -164,7 +178,7 @@ def build_message(args: argparse.Namespace, ctx: bi.GitHubContext) -> tuple[str,
         parts.append(f"# {html.escape(args.product)} \u2014 Debug Artifacts")
     else:
         parts.append(f"# {html.escape(args.product)} \u2014 Build Complete")
-        parts.append(release_chip(args.release_type))
+        parts.append(release_chip(args.release_type, args.release_tag))
 
     if not args.debug_bundle:
         feats_block = build_features_block(feats)

@@ -42,10 +42,24 @@ inputs:
     type: string
     default: ''
   kernel_uname:
+    description: 'Fallback kernel uname, only used if it cannot be extracted from the built Image'
     required: false
     type: string
     default: ''
   ksun_version:
+    required: false
+    type: string
+    default: ''
+  ksun_tag:
+    required: false
+    type: string
+    default: ''
+  susfs_version:
+    required: false
+    type: string
+    default: ''
+  kernel_version:
+    description: 'Actual compiled kernel version (ANDROID_RELEASE-KERNEL_VERSION_MAKE), not the static config major.minor field'
     required: false
     type: string
     default: ''
@@ -59,6 +73,11 @@ inputs:
     required: false
     type: string
     default: ''
+  gh_token:
+    description: 'GITHUB_TOKEN — required when release_type is Pre-release/Release, for tagging and creating the GitHub Release'
+    required: false
+    type: string
+    default: ''
 
 runs:
   using: composite
@@ -68,6 +87,26 @@ runs:
       with:
         name: ${{ env.CODENAME }}-${{ env.OS_SHORT }}
         path: ${{ env.DIST_DIR }}/
+
+    - name: Resolve kernel uname from Image
+      id: kernel_uname
+      shell: bash
+      run: |
+        set -euo pipefail
+        IMAGE="${DIST_DIR}/Image"
+        if [ -f "${IMAGE}" ]; then
+          RESOLVED=$(strings "${IMAGE}" | grep -i 'linux version' | head -1 | awk '{print $1,$2,$3}')
+        else
+          RESOLVED=""
+        fi
+
+        if [ -z "${RESOLVED}" ]; then
+          echo "::warning::[distribution] Could not extract a uname string from ${IMAGE} — falling back to the configured kernel_uname input."
+          RESOLVED="${{ inputs.kernel_uname }}"
+        fi
+
+        echo "value=${RESOLVED}" >> "${GITHUB_OUTPUT}"
+        echo "Resolved kernel uname: ${RESOLVED}"
 
     - name: Zip debug artifacts for Telegram uploads
       id: tg_debug_zip
@@ -79,6 +118,79 @@ runs:
         DEBUG_ZIP="/tmp/debug-common-${{ env.CODENAME }}-${{ env.OS_SHORT }}-${GITHUB_RUN_NUMBER}.zip"
         ( cd "${DIST_DIR}" && zip -r9 "${DEBUG_ZIP}" ./* >/dev/null )
         echo "zip_path=${DEBUG_ZIP}" >> "${GITHUB_OUTPUT}"
+
+    - name: Download Wireless Firmware Module for Nethunter
+      id: download_external
+      if: ${{ inputs.release_type != 'none' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh_token }}
+        SOURCE_REPO: nullptr-t-oss/Nethunter-Wireless-Firmware
+      run: |
+        set -euo pipefail
+        echo "--- Downloading Latest Release Asset from ${SOURCE_REPO} ---"
+
+        DOWNLOAD_DIR="/tmp/wireless-firmware"
+        mkdir -p "${DOWNLOAD_DIR}"
+
+        LATEST_RELEASE_TAG=$(gh api "repos/${SOURCE_REPO}/releases/latest" --jq '.tag_name')
+        if [ -z "${LATEST_RELEASE_TAG}" ]; then
+          echo "::warning::Could not find a latest release in ${SOURCE_REPO}. Skipping external download."
+          exit 0
+        fi
+
+        echo "Found latest release tag: ${LATEST_RELEASE_TAG}"
+        SOURCE_REPO_NAME=$(basename "${SOURCE_REPO}")
+        EXPECTED_ASSET_NAME="${SOURCE_REPO_NAME}-${LATEST_RELEASE_TAG}.zip"
+
+        gh release download "${LATEST_RELEASE_TAG}" \
+          --repo "${SOURCE_REPO}" \
+          --pattern "${EXPECTED_ASSET_NAME}" \
+          --dir "${DOWNLOAD_DIR}" \
+          --clobber
+
+        echo "dir=${DOWNLOAD_DIR}" >> "${GITHUB_OUTPUT}"
+        echo "Finished downloading ${EXPECTED_ASSET_NAME} to ${DOWNLOAD_DIR}."
+
+    - name: Generate release name
+      if: ${{ inputs.release_type != 'none' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ -n "${{ inputs.susfs_version }}" ]]; then
+          RELEASE_NAME="${PRODUCT} ( ${CODENAME} ) ${OS} EmberHeart Kernel With KernelSU Next ${{ inputs.ksun_tag }} , Nethunter & SUSFS ${{ inputs.susfs_version }}"
+        else
+          RELEASE_NAME="${PRODUCT} ( ${CODENAME} ) ${OS} EmberHeart Kernel With KernelSU Next ${{ inputs.ksun_tag }} & Nethunter"
+        fi
+        echo "RELEASE_NAME=${RELEASE_NAME}" >> "${GITHUB_ENV}"
+
+    - name: Generate and create new tag
+      if: ${{ inputs.release_type != 'none' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh_token }}
+      run: |
+        set -euo pipefail
+        BASE_TAG="${CODENAME}-${OS_SHORT}"
+
+        # Scoped to tags matching THIS device+OS prefix only — taking the repo's
+        # single latest tag across all devices (the previous approach) could
+        # inherit and increment an unrelated device's -rN by coincidence.
+        LATEST_N=$(gh api "repos/${{ github.repository }}/tags" --paginate --jq '.[].name' \
+          | grep -E "^${BASE_TAG}-r[0-9]+$" \
+          | grep -oE '[0-9]+$' \
+          | sort -n | tail -n1 || true)
+
+        if [ -z "${LATEST_N}" ]; then
+          NEW_TAG="${BASE_TAG}-r0"
+        else
+          NEW_TAG="${BASE_TAG}-r$((LATEST_N + 1))"
+        fi
+
+        echo "New tag: ${NEW_TAG}"
+        echo "NEW_TAG=${NEW_TAG}" >> "${GITHUB_ENV}"
+        git tag "${NEW_TAG}"
+        git push origin "${NEW_TAG}"
 
     - name: Send build notification
       if: ${{ inputs.tg_enabled == 'true' }}
@@ -111,13 +223,20 @@ runs:
           [ -f "$f" ] && FILE_ARGS+=(--file "$f")
         done
 
+        KSUN_COMMIT_URL=""
+        if [ -n "${KSUN_COMMIT_SHA_FULL:-}" ]; then
+          KSUN_COMMIT_URL="https://github.com/KernelSU-Next/KernelSU-Next/commit/${KSUN_COMMIT_SHA_FULL}"
+        fi
+
         python3 "${{ github.action_path }}/../telegram/telegram.py" \
           --product "${PRODUCT}" \
           --release-type "${{ inputs.release_type }}" \
+          --release-tag "${NEW_TAG:-}" \
           --lto "${{ inputs.lto }}" \
           --optimize-level "${{ inputs.optimize_level }}" \
-          --kernel-uname "${{ inputs.kernel_uname }}" \
+          --kernel-uname "${{ steps.kernel_uname.outputs.value }}" \
           --ksun-version "${{ inputs.ksun_version }}" \
+          --ksun-commit-url "${KSUN_COMMIT_URL}" \
           --build-start "${{ inputs.build_start }}" \
           "${FEAT_ARGS[@]}" \
           "${FILE_ARGS[@]}"
@@ -137,8 +256,82 @@ runs:
           --release-type "${{ inputs.release_type }}" \
           --lto "${{ inputs.lto }}" \
           --optimize-level "${{ inputs.optimize_level }}" \
-          --kernel-uname "${{ inputs.kernel_uname }}" \
+          --kernel-uname "${{ steps.kernel_uname.outputs.value }}" \
           --ksun-version "${{ inputs.ksun_version }}" \
           --build-start "${{ inputs.build_start }}" \
           --debug-bundle \
           --file "${{ steps.tg_debug_zip.outputs.zip_path }}"
+
+    - name: Generate release notes
+      if: ${{ inputs.release_type != 'none' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        IFS=',' read -ra FEATURES <<< "${{ inputs.features }}"
+        FEAT_ARGS=()
+        for f in "${FEATURES[@]}"; do
+          [ -n "$f" ] && FEAT_ARGS+=(--feat "$f")
+        done
+
+        FILE_ARGS=()
+        for f in "${DIST_DIR}"/*.{zip,img}; do
+          [ -f "$f" ] && FILE_ARGS+=(--file "$f")
+        done
+
+        SUSFS_ARGS=()
+        if [ -n "${{ inputs.susfs_version }}" ]; then
+          SUSFS_ARGS=(--susfs-version "${{ inputs.susfs_version }}")
+        fi
+
+        python3 "${{ github.action_path }}/../telegram/release_readme.py" \
+          --release-type "${{ inputs.release_type }}" \
+          --os "${OS}" \
+          --kernel-version "${{ inputs.kernel_version }}" \
+          --ksun-tag "${{ inputs.ksun_tag }}" \
+          --ksun-version "${{ inputs.ksun_version }}" \
+          "${SUSFS_ARGS[@]}" \
+          "${FEAT_ARGS[@]}" \
+          "${FILE_ARGS[@]}" \
+          --out /tmp/release_notes.md
+
+        echo "--- Final Release Notes ---"
+        cat /tmp/release_notes.md
+
+    - name: Create GitHub Pre-release
+      if: ${{ inputs.release_type == 'Pre-release' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh_token }}
+      run: |
+        set -euo pipefail
+        gh release create "${NEW_TAG}" \
+          --repo "${{ github.repository }}" \
+          --title "*Test-build*-${RELEASE_NAME}-*Test Build*" \
+          --notes-file /tmp/release_notes.md \
+          --prerelease
+
+    - name: Create GitHub Release
+      if: ${{ inputs.release_type == 'Release' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh_token }}
+      run: |
+        set -euo pipefail
+        gh release create "${NEW_TAG}" \
+          --repo "${{ github.repository }}" \
+          --title "${RELEASE_NAME}" \
+          --notes-file /tmp/release_notes.md
+
+    - name: Upload Release Assets
+      if: ${{ inputs.release_type != 'none' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh_token }}
+      run: |
+        set -euo pipefail
+        for f in "${DIST_DIR}"/*.{zip,img} "${{ steps.download_external.outputs.dir }}"/*.zip; do
+          if [ -f "$f" ]; then
+            echo "Uploading ${f}..."
+            gh release upload "${NEW_TAG}" "${f}" --repo "${{ github.repository }}" --clobber
+          fi
+        done
