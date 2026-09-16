@@ -95,7 +95,10 @@ runs:
         set -euo pipefail
         IMAGE="${DIST_DIR}/Image"
         if [ -f "${IMAGE}" ]; then
-          RESOLVED=$(strings "${IMAGE}" | grep -i 'linux version' | head -1 | awk '{print $1,$2,$3}')
+          # -iE '...[0-9]' skips false matches like a raw "Linux version %s"
+          # printf format-string literal elsewhere in the binary, which
+          # `strings` also picks up and can sort before the real banner.
+          RESOLVED=$(strings "${IMAGE}" | grep -iE 'linux version [0-9]' | head -1 | awk '{print $1,$2,$3}')
         else
           RESOLVED=""
         fi
@@ -235,6 +238,7 @@ runs:
           --lto "${{ inputs.lto }}" \
           --optimize-level "${{ inputs.optimize_level }}" \
           --kernel-uname "${{ steps.kernel_uname.outputs.value }}" \
+          --clang-version "${CLANG_VERSION}" \
           --ksun-version "${{ inputs.ksun_version }}" \
           --ksun-commit-url "${KSUN_COMMIT_URL}" \
           --build-start "${{ inputs.build_start }}" \
@@ -257,6 +261,7 @@ runs:
           --lto "${{ inputs.lto }}" \
           --optimize-level "${{ inputs.optimize_level }}" \
           --kernel-uname "${{ steps.kernel_uname.outputs.value }}" \
+          --clang-version "${CLANG_VERSION}" \
           --ksun-version "${{ inputs.ksun_version }}" \
           --build-start "${{ inputs.build_start }}" \
           --debug-bundle \

@@ -60,6 +60,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--lto", default="")
     p.add_argument("--optimize-level", default="")
     p.add_argument("--kernel-uname", default="")
+    p.add_argument("--clang-version", default="")
     p.add_argument("--ksun-version", default="")
     p.add_argument("--release-type", default="none", choices=list(RELEASE_CHIP.keys()))
     p.add_argument("--release-tag", default="", help="e.g. salami-oos16-r7. Shown on the release chip instead of the category label when release-type is Pre-release/Release.")
@@ -86,9 +87,11 @@ def lto_chip(lto: str) -> str:
 
 def release_chip(release_type: str, release_tag: str) -> str:
     label, style = RELEASE_CHIP.get(release_type, (release_type, ""))
+    category_chip = f'<tg-button type="disabled" style="{style}">{html.escape(label)}</tg-button>'
     if release_tag and release_type in ("Pre-release", "Release"):
-        label = release_tag
-    return f'<tg-button type="disabled" style="{style}">{html.escape(label)}</tg-button>'
+        tag_chip = f'<tg-button type="disabled" style="primary">{html.escape(release_tag)}</tg-button>'
+        return f'<tg-button-row>{category_chip}{tag_chip}</tg-button-row>'
+    return category_chip
 
 
 def build_features_block(feats: dict[str, list[bi.Feature]]) -> str:
@@ -133,7 +136,8 @@ def build_info_table(args: argparse.Namespace) -> str:
     rows = [
         ("LTO", lto_chip(args.lto)),
         ("Optimization", html.escape(args.optimize_level or "N/A")),
-        ("Kernel", html.escape(args.kernel_uname or "N/A")),
+        ("Kernel Version", html.escape(args.kernel_uname or "N/A")),
+        ("Clang", html.escape(args.clang_version or "N/A")),
         ("KSU", ksu_cell(args.ksun_version, args.ksun_commit_url)),
     ]
     body = "".join(f"<tr><td>{label}</td><td>{value}</td></tr>" for label, value in rows)
