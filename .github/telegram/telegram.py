@@ -90,7 +90,7 @@ def release_chip(release_type: str, release_tag: str) -> str:
     category_chip = f'<tg-button type="disabled" style="{style}">{html.escape(label)}</tg-button>'
     if release_tag and release_type in ("Pre-release", "Release"):
         tag_chip = f'<tg-button type="disabled" style="primary">{html.escape(release_tag)}</tg-button>'
-        return f'<tg-button-row>{category_chip}{tag_chip}</tg-button-row>'
+        return f'{category_chip} {tag_chip}'
     return category_chip
 
 
