@@ -1,4 +1,4 @@
-<svg viewBox="0 0 390 140" xmlns="http://www.w3.org/2000/svg" width="100%">
+<svg viewBox="0 0 390 170" xmlns="http://www.w3.org/2000/svg" width="100%">
   <defs>
     <style>
       /* GitHub doesn't allow external css :( */
@@ -35,11 +35,11 @@
   </g>
 
   <g transform="translate(144, 85)">
-    {{TAG}}
+    {{COMMIT}}
   </g>
 
-  <g transform="translate(266, 85)">
-    {{COMMIT}}
+  <g transform="translate(34, 105)">
+    {{TAG}}
   </g>
 
 </svg>
