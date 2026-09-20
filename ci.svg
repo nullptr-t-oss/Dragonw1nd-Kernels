@@ -73,48 +73,20 @@
       <line x1="15" x2="21" y1="12" y2="12"/>
     </svg>
   </g>
-  <text x="38" y="19" font-family="'Google Sans', sans-serif" font-size="13" font-weight="500" fill="#007AFF">47e0787</text>
+  <text x="38" y="19" font-family="'Google Sans', sans-serif" font-size="13" font-weight="500" fill="#007AFF">bf95db2</text>
 </svg>
   </g>
 
   <g transform="translate(34, 128)">
     <svg width="140" height="28" viewBox="0 0 140 28" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <style>
-      .rotate-ring {
-        transform-origin: 12px 12px;
-        animation: spin 10s linear infinite;
-      }
-
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-    </style>
-  </defs>
-
-  <rect width="140" height="28" rx="14" fill="#FF9500" fill-opacity="0.15"/>
-
+  <rect width="140" height="28" rx="14" fill="#34C759" fill-opacity="0.15"/>
   <g transform="translate(14, 6)">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-      <g class="rotate-ring">
-        <path d="M10.1 2.18a9.93 9.93 0 0 1 3.8 0"/>
-        <path d="M17.6 3.71a9.95 9.95 0 0 1 2.69 2.7"/>
-        <path d="M21.82 10.1a9.93 9.93 0 0 1 0 3.8"/>
-        <path d="M20.29 17.6a9.95 9.95 0 0 1-2.7 2.69"/>
-        <path d="M13.9 21.82a9.94 9.94 0 0 1-3.8 0"/>
-        <path d="M6.4 20.29a9.95 9.95 0 0 1-2.69-2.7"/>
-        <path d="M2.18 13.9a9.93 9.93 0 0 1 0-3.8"/>
-        <path d="M3.71 6.4a9.95 9.95 0 0 1 2.7-2.69"/>
-      </g>
-
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34C759" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
       <circle cx="12" cy="12" r="1"/>
-
     </svg>
   </g>
-
-  <text x="38" y="19" font-family="'Google Sans', sans-serif" font-size="13" font-weight="500" fill="#FF9500">salami-oos16-r1</text>
+  <text x="38" y="19" font-family="'Google Sans', sans-serif" font-size="13" font-weight="500" fill="#34C759">salami-oos16-r0</text>
 </svg>
   </g>
 
