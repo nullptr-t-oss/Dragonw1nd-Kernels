@@ -746,8 +746,8 @@ runs:
         PREBUILTS="${KERNEL_KIT}/device/${CODENAME}-${OS_SHORT}/boot"
         IMAGE="${DIST_DIR}/Image${{ steps.build_config.outputs.kernel_compression }}"
 
-        if [[ -f "${ROOT_DIR}/tools/mkbootimg/mkbootimg.py" ]]; then
-          MKBOOTIMG="${ROOT_DIR}/tools/mkbootimg/mkbootimg.py"
+        if [[ -f "${KERNEL_KIT}/tools/mkbootimg/mkbootimg.py" ]]; then
+          MKBOOTIMG="${KERNEL_KIT}/tools/mkbootimg/mkbootimg.py"
         else
           MKBOOTIMG="mkbootimg"
         fi
@@ -872,7 +872,7 @@ runs:
           set -x
           # Allow build.config to ovveride default signing algorithm and boot signing key
           AVB_SIGN_BOOT_ALGO=${AVB_SIGN_BOOT_ALGO:-SHA256_RSA4096}
-          AVB_SIGN_BOOT_KEY=${AVB_SIGN_BOOT_KEY:-${KERNEL_PLATFORM}/tools/mkbootimg/gki/testdata/testkey_rsa4096.pem}
+          AVB_SIGN_BOOT_KEY=${AVB_SIGN_BOOT_KEY:-${KERNEL_KIT}/tools/mkbootimg/gki/testdata/testkey_rsa4096.pem}
 
           AVBTOOL_ARGS+=("--algorithm" "${AVB_SIGN_BOOT_ALGO}")
           AVBTOOL_ARGS+=("--key" "${AVB_SIGN_BOOT_KEY}")
@@ -1108,8 +1108,8 @@ runs:
       shell: bash
       run: |
         PREBUILTS="${KERNEL_KIT}/device/${CODENAME}-${OS_SHORT}/vendor_boot"
-        if [[ -f "${ROOT_DIR}/tools/mkbootimg/mkbootimg.py" ]]; then
-          MKBOOTIMG="${ROOT_DIR}/tools/mkbootimg/mkbootimg.py"
+        if [[ -f "${KERNEL_KIT}/tools/mkbootimg/mkbootimg.py" ]]; then
+          MKBOOTIMG="${KERNEL_KIT}/tools/mkbootimg/mkbootimg.py"
         else
           MKBOOTIMG="mkbootimg"
         fi
@@ -1375,7 +1375,7 @@ runs:
           # Allow build.config to ovveride default signing algorithm and vendor_boot signing key
           set -x
           AVB_SIGN_VENDOR_BOOT_ALGO=${AVB_SIGN_VENDOR_BOOT_ALGO:-SHA256_RSA4096}
-          AVB_SIGN_VENDOR_BOOT_KEY=${AVB_SIGN_VENDOR_BOOT_KEY:-${ROOT_DIR}/tools/mkbootimg/gki/testdata/testkey_rsa4096.pem}
+          AVB_SIGN_VENDOR_BOOT_KEY=${AVB_SIGN_VENDOR_BOOT_KEY:-${KERNEL_KIT}/tools/mkbootimg/gki/testdata/testkey_rsa4096.pem}
 
           AVBTOOL_ARGS+=("--algorithm" "${AVB_SIGN_VENDOR_BOOT_ALGO}")
           AVBTOOL_ARGS+=("--key" "${AVB_SIGN_VENDOR_BOOT_KEY}")

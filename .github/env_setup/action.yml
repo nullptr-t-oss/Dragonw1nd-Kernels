@@ -351,43 +351,18 @@ runs:
           fi
         fi
 
-    - name: Export build-tools path
+    - name: Export kernel build-tools path
       shell: bash
       run: |
-        if [[ -d "${ROOT_DIR}/build/build-tools/path/linux-x86" ]]; then
-          echo "${ROOT_DIR}/build/build-tools/path/linux-x86" >> "${GITHUB_PATH}"
-        fi
-
-        if [[ -d "${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/bin" ]]; then
-          echo "${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/bin" >> "${GITHUB_PATH}"
-        elif [[ -d "${ROOT_DIR}/prebuilts/kernel-build-tools/linux_musl-x86/bin" ]]; then
-          echo "${ROOT_DIR}/prebuilts/kernel-build-tools/linux_musl-x86/bin" >> "${GITHUB_PATH}"
+        if [[ -d "${KERNEL_KIT}/bin/kernel/prebuilts/build-tools/linux_musl-x86/bin" ]]; then
+          echo "${KERNEL_KIT}/bin/kernel/prebuilts/build-tools/linux_musl-x86/bin" >> "${GITHUB_PATH}"
         else
-          echo "prebuilt bins not found in kplatform, cloning prebuilts from aosp"
-
-          mkdir -p "${ROOT_DIR}/build/build-tools"
-          cd "${ROOT_DIR}/build/build-tools" 
-          wget https://android.googlesource.com/kernel/prebuilts/build-tools/+archive/refs/heads/main-kernel.tar.gz
-          tar -xzf main-kernel.tar.gz
-          rm main-kernel.tar.gz
-
-          if [[ -d "${ROOT_DIR}/build/build-tools/linux-x86/bin" ]]; then
-            echo "${ROOT_DIR}/build/build-tools/linux-x86/bin" >> "${GITHUB_PATH}"
-          elif [[ -d "${ROOT_DIR}/build/build-tools/linux_musl-x86/bin" ]]; then
-            echo "${ROOT_DIR}/build/build-tools/linux_musl-x86/bin" >> "${GITHUB_PATH}"
+          if [[ -d "${KERNEL_KIT}/bin/kernel/prebuilts/build-tools/linux-x86/bin" ]]; then
+            echo "${KERNEL_KIT}/bin/kernel/prebuilts/build-tools/linux-x86/bin" >> "${GITHUB_PATH}"
           else
-            echo "::error:: couldn't find prebuilt bin path in aosp prebuilts"
+            echo "::error:: kernel build-tools not found in KERNEL_KIT!"
           fi
         fi
-
-    - name: Prioritize system coreutils over AOSP prebuilt toybox
-      shell: bash
-      run: |
-        # This should fix the following error when setting up Ksun :
-        # realpath: Unknown option 'relative-to=/home/runner/work/EmberHeart-Kernels/EmberHeart-Kernels/salami-oos16/kernel_platform/common/drivers' (see "realpath --help")
-        # ln: cannot create symbolic link from '' to 'kernelsu': No such file or directory
-        #
-        echo "/usr/bin" >> "${GITHUB_PATH}"
 
     - name: Setup clang type
       if: ${{ inputs.clang_version != 'default' }}
