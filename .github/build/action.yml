@@ -536,7 +536,6 @@ runs:
         # Exports for external kernel modules
         export BOARD_PLATFORM="${SOC}"
         export TARGET_BOARD_PLATFORM="${SOC}"
-        export KERNEL_BUILD=n
 
         MAKE_FLAGS+=(
           KERNEL_SRC="${ROOT_DIR}/${KERNEL_DIR}"
