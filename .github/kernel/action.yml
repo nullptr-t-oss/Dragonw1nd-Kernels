@@ -688,59 +688,113 @@ runs:
         case "$BRANCH" in
           oneplus/sm8850|oneplus/sm8845)
             if patch -R -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_a16-6.12.patch" >/dev/null 2>&1; then
-              echo "::note::Patch already applied. Skipping."
+              echo "::note:: Patch already applied. Skipping."
+            elif ! patch -p1 -s -N -F0 --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_a16-6.12.patch" >/dev/null 2>&1; then
+              echo "::note:: Couldn't apply patch. Skipping."
             else
               patch -p1 -N -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_a16-6.12.patch"
+              _sysvipc=true
             fi
             ;;
           oneplus/sm8550|oneplus/sm7550)
             if patch -R -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_1_2_3.patch" >/dev/null 2>&1; then
-              echo "::note::Patch already applied. Skipping."
+              echo "::note:: Patch already applied. Skipping."
+            elif ! patch -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_1_2_3.patch" >/dev/null 2>&1; then
+              echo "::note:: Couldn't apply patch. Skipping."
             else
               patch -p1 -N -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_1_2_3.patch"
+              _sysvipc=true
             fi
             ;;
           oneplus/sm8450|oneplus/sm8475|oneplus/mt6895|oneplus/mt6983|oneplus/mt6789)
             if [[ "$ANDROID_RELEASE" = "android12" ]] && [[ "$KERNEL_VERSION" = "5.10" ]]; then
               if patch -R -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_bypass_a16-6.12_below.patch" >/dev/null 2>&1; then
-                echo "::note::Patch already applied. Skipping."
+                echo "::note:: Patch already applied. Skipping."
+              elif ! patch -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_bypass_a16-6.12_below.patch" >/dev/null 2>&1; then
+                echo "::note:: Couldn't apply patch. Skipping."
               else
                 patch -p1 -N -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_bypass_a16-6.12_below.patch"
+                _sysvipc=true
               fi
 
               if patch -R -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_abi_padding_for_posix_mqueue.patch" >/dev/null 2>&1; then
-                echo "::note::Patch already applied. Skipping."
+                echo "::note:: Patch already applied. Skipping."
+              elif ! patch -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_abi_padding_for_posix_mqueue.patch" >/dev/null 2>&1; then
+                echo "::note:: Couldn't apply patch. Skipping."
               else
                 patch -p1 -N -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_abi_padding_for_posix_mqueue.patch"
               fi
             else
 
               if patch -R -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch" >/dev/null 2>&1; then
-                echo "::note::Patch already applied. Skipping."
+                echo "::note:: Patch already applied. Skipping."
+              elif ! patch -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch" >/dev/null 2>&1; then
+                echo "::note:: Couldn't apply patch. Skipping."
               else
                 patch -p1 -N -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch"
+                _sysvipc=true
               fi
 
             fi
             ;;
           los/sm8550)
             if patch -R -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_3_4_5.patch" >/dev/null 2>&1; then
-                echo "::note::Patch already applied. Skipping."
+                echo "::note:: Patch already applied. Skipping."
+            elif ! patch -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_3_4_5.patch" >/dev/null 2>&1; then
+              echo "::note:: Couldn't apply patch. Skipping."
             else
-                patch -p1 -N -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_3_4_5.patch"
+              patch -p1 -N -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_3_4_5.patch"
+              _sysvipc=true
             fi
             ;;
           *)
             if patch -R -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch" >/dev/null 2>&1; then
-              echo "::note::Patch already applied. Skipping."
+              echo "::note:: Patch already applied. Skipping."
+            elif ! patch -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch" >/dev/null 2>&1; then
+              echo "::note:: Couldn't apply patch. Skipping."
+
+              if patch -R -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_3_4_5.patch" >/dev/null 2>&1; then
+                echo "::note:: Patch already applied. Skipping."
+              elif ! patch -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_3_4_5.patch" >/dev/null 2>&1; then
+                echo "::note:: Couldn't apply patch. Skipping."
+              else
+                patch -p1 -N -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_3_4_5.patch"
+                _sysvipc=true
+              fi
             else
               patch -p1 -N -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch"
+              _sysvipc=true
             fi
             ;;
         esac
 
+        # Add extra check in case soc specific case failed
+        if [[ "${_sysvipc:-false}" == "true" ]]; then
+          if patch -R -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch" >/dev/null 2>&1; then
+            echo "::note:: Patch already applied. Skipping."
+          elif ! patch -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch" >/dev/null 2>&1; then
+            echo "::note:: Couldn't apply patch. Skipping."
+
+            if patch -R -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_3_4_5.patch" >/dev/null 2>&1; then
+              echo "::note:: Patch already applied. Skipping."
+            elif ! patch -p1 -s -N --dry-run -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_3_4_5.patch" >/dev/null 2>&1; then
+              echo "::note:: Couldn't apply patch. Skipping."
+            else
+              patch -p1 -N -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_3_4_5.patch"
+              _sysvipc=true
+            fi
+          else
+            patch -p1 -N -i "${WILD_KERNEL_PATCHES}/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch"
+            _sysvipc=true
+          fi
+        fi
+
+        if [[ "${_sysvipc:-false}" == "true" ]]; then
+          ./scripts/config --file arch/arm64/configs/kernel.config -e CONFIG_SYSVIPC
+          echo "FEATURES=${FEATURES:-} ds" >> "${GITHUB_ENV}"
+        fi
+
         ./scripts/config --file arch/arm64/configs/kernel.config \
-                  -e CONFIG_SYSVIPC \
                   -e CONFIG_DEVTMPFS \
                   -e CONFIG_PID_NS \
                   -e CONFIG_POSIX_MQUEUE \
@@ -750,8 +804,6 @@ runs:
                   -e CONFIG_NETFILTER_XT_TARGET_LOG \
                   -e CONFIG_NETFILTER_XT_MATCH_RECENT \
                   -e CONFIG_USER_NS
-
-        echo "FEATURES=${FEATURES:-} ds" >> "${GITHUB_ENV}"
 
         echo "Other configs added ✅"
         echo "::endgroup::"
