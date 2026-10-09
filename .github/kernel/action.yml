@@ -138,8 +138,8 @@ runs:
 
         if [[ "${KSU_VERSION}" -gt 33095 ]] && [[ "${{ env.KERNEL_VERSION }}" == "6.12" ]]; then
           sed -i 's|ccflags-y += -I$(KSU_KERNEL_DIR) -I$(KSU_KERNEL_DIR)/include|ccflags-y += -I$(KSU_KERNEL_DIR) -I$(KSU_KERNEL_DIR)/include -I$(KSU_KERNEL_DIR)/include/uapi|' Kbuild
-          sed -i 's|$(src)|$(abspath $(src))|' Kbuild
-          sed -i 's|$(srctree)/$(src)|$(abspath $(srctree)/$(src))|' Kbuild
+          sed -i 's|^KSU_KERNEL_DIR := $(srctree)/$(src)$|KSU_KERNEL_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))|' Kbuild
+          sed -i 's|^KSU_KERNEL_DIR := $(src)$|KSU_KERNEL_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))|' Kbuild
         fi
 
         if [[ "${KSU_VERSION}" -lt 12884 ]]; then
@@ -182,20 +182,23 @@ runs:
         cd "${ROOT_DIR}"
         KERNEL_DIR="common"
 
-        shopt -s nullglob
-        cp -t "${KERNEL_DIR}" "${susfs_dir}/kernel_patches/50_add_susfs_in_${SUSFS_KERNEL_BRANCH}.patch"
-        cp -t "${KERNEL_DIR}/fs" "${susfs_dir}/susfs4ksu/kernel_patches/fs/"*
-        cp -t "${KERNEL_DIR}/include/linux" "${susfs_dir}/kernel_patches/include/linux/"*
-        shopt -u nullglob
+        find "${susfs_dir}/kernel_patches/fs/" -maxdepth 1 -type f -exec cp -t "${KERNEL_DIR}/fs" {} +
+        find "${susfs_dir}/kernel_patches/include/linux/" -maxdepth 1 -type f -exec cp -t "${KERNEL_DIR}/include/linux" {} +
 
         susfs_version=$(grep '#define SUSFS_VERSION' ${ROOT_DIR}/${KERNEL_DIR}/include/linux/susfs.h | awk -F'"' '{print $2}')
         echo "SUSVER=${susfs_version}" >> ${GITHUB_ENV}
         echo "susfs_version=${susfs_version:-unknown}" >> ${GITHUB_OUTPUT}
         echo "SuSFS Version: ${susfs_version}"
 
+        _susfs_fix_patches="${WILD_KERNEL_PATCHES}/next/susfs_fix_patches"
+        if [[ -d "${BOUTON_KERNEL_PATCHES}/next/susfs_fix_patches/${susfs_version}" ]]; then
+          _susfs_fix_patches="${BOUTON_KERNEL_PATCHES}/next/susfs_fix_patches"
+        fi
+        echo "SusFS fix patches: ${_susfs_fix_patches}"
+
         # Function to compare semantic versions
         version_lte() {
-          [[ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$1" ]
+          [[ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$1" ]]
         }
 
         if version_lte "${susfs_version:1}" "1.5.12"; then
@@ -263,6 +266,17 @@ runs:
                 patch -p1 --forward -i "${WILD_KERNEL_PATCHES}/next/susfs_fix_patches/${susfs_version}/multi_sepolicy_fix.patch"
             fi
             ;;
+          "v2.3.0")
+            patch -p1 --forward < "${susfs_dir}/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
+            for file in $(find ./kernel -maxdepth 2 -name "*.rej" -exec basename {} .rej \;); do
+              echo "Patching file: ${file} with fix_${file}.patch"
+              patch -p1 --forward < "${_susfs_fix_patches}/${susfs_version}/fix_${file}.patch"
+            done
+            echo "Patching Hook Mode!"
+            patch -p1 --forward < "${_susfs_fix_patches}/${susfs_version}/overwrite_hook_mode.patch"
+            echo "Patching KSU_TOOLKIT Support for SusFS kernel!"
+            patch -p1 --forward < "${_susfs_fix_patches}/${susfs_version}/ksu_toolkit.patch"
+            ;;
           *)
             echo "::error::Unsupported SUSFS version: ${susfs_version}"
             exit 1
@@ -273,30 +287,34 @@ runs:
           if ! grep -qxF '#include <trace/hooks/fs.h>' ./fs/namespace.c; then
             sed -i '/#include <trace\/hooks\/blk.h>/a #include <trace\/hooks\/fs.h>' ./fs/namespace.c
           fi
+
+          if ! grep -qxF 'extern void __fold_filemap_fixup_entry(struct vma_iterator *iter, unsigned long *end);' ./include/linux/page_size_compat.h; then
+            patch -p1 < "${WILD_KERNEL_PATCHES}/common/backports/fold_fixup_entries.patch"
+          fi
         fi
 
         # Fake kernel patch to fix failures
         fake_patched=0
+        fake_patched_expand=0
         if [[ "${{ env.ANDROID_RELEASE }}" = "android15" ]] && [[ "${{ env.KERNEL_VERSION }}" = "6.6" ]]; then
           if ! grep -qxF $'\tunsigned int nr_subpages = __PAGE_SIZE / PAGE_SIZE;' ./fs/proc/task_mmu.c; then
             echo "nr_subpages Line not found. Fake Patching!"
             sed -i -e '/int ret = 0, copied = 0;/a \\tunsigned int nr_subpages \= __PAGE_SIZE \/ PAGE_SIZE;' -e '/int ret = 0, copied = 0;/a \\tpagemap_entry_t \*res = NULL;' ./fs/proc/task_mmu.c
             fake_patched=1
           fi
-        fi
 
-        if ! grep -qxF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
+          if ! grep -qxF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
             echo "#include <linux/dma-buf.h> Line not found. Adding missing header"
             sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
           fi
-          
+
           if ! grep -qxF '#include <linux/zswap.h>' ./mm/memory.c; then
             echo "#include <linux/zswap.h> Line not found. Adding missing header"
             sed -i '/#include <linux\/sched\/sysctl.h>/a #include <linux\/zswap.h>' ./mm/memory.c
           fi
-          
+
           if grep -qF 'if (vma->vm_end > last_vma_end)' ./fs/proc/task_mmu.c && ! grep -qxF 'SUSFS_IS_INODE_SUS_MAP' ./fs/proc/task_mmu.c; then
-            echo "Temporarily expand the `last_vma_end` `if` block to fix a matching issue."
+            echo "Temporarily expand the last_vma_end if block to fix a matching issue."
             perl -i -0pe 's/\t\t\tif \(vma->vm_end > last_vma_end\)\n\t\t\t\tsmap_gather_stats\(vma, &mss, last_vma_end\);/\t\t\tif (vma->vm_end > last_vma_end) {\n\t\t\t\tsmap_gather_stats(vma, \&mss, last_vma_end);\n\t\t\t\tlast_vma_end = vma->vm_end;\n\t\t\t}/' ./fs/proc/task_mmu.c
             fake_patched_expand=1
           fi
@@ -327,17 +345,66 @@ runs:
             echo "vma_pages Line not found. Fake Patching!"
             fake_patched=1
           fi
-          
+
           if ! grep -qxF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
             echo "#include <linux/dma-buf.h> Line not found. Adding missing header"
             sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
           fi
         fi
 
-        patch -p1 -i 50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }}.patch
+        super_fs_hook=0
+        if grep -qxF '#include <trace/hooks/fs.h>' ./fs/super.c; then
+          echo "Parking the fs/super.c vendor-hook include so SusFS can match"
+          sed -i '/^#include <trace\/hooks\/fs\.h>$/,+1{/^#include <trace\/hooks\/fs\.h>$/d; /^$/d}' ./fs/super.c
+          super_fs_hook=1
+        fi
+
+        patch -p1 -i "${susfs_dir}/kernel_patches/50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }}.patch"
+
+        if [ "${super_fs_hook}" = 1 ]; then
+          echo "Restoring the fs/super.c vendor-hook include"
+          sed -i '0,/^static int thaw_super_locked/s|^static int thaw_super_locked|#include <trace/hooks/fs.h>\n\n&|' ./fs/super.c
+        fi
+
+        statfs_use=$(grep -n 'susfs_sus_kstat_spoof_vfs_statfs(' ./fs/statfs.c | head -n1 | cut -d: -f1 || true)
+        statfs_decl=$(grep -n '^extern int susfs_sus_kstat_spoof_vfs_statfs' ./fs/statfs.c | head -n1 | cut -d: -f1 || true)
+        if [ -n "${statfs_use}" ] && [ -n "${statfs_decl}" ] && [ "${statfs_decl}" -gt "${statfs_use}" ]; then
+          echo "Hoisting the susfs_sus_kstat_spoof_vfs_statfs() declaration above its first use"
+          cat > /tmp/susfs_statfs_proto.h <<'PROTO'
+        extern int susfs_sus_kstat_spoof_vfs_statfs(struct inode *inode, struct kstatfs *buf, bool *is_fuse);
+        PROTO
+          sed -i '/^#endif \/\/ #ifdef CONFIG_KSU_SUSFS$/r /tmp/susfs_statfs_proto.h' ./fs/statfs.c
+        fi
+
+        if grep -q 'security_sb_statfs' ./fs/susfs.c && ! grep -q '^#include <linux/security.h>$' ./fs/susfs.c; then
+          echo "Adding the missing <linux/security.h> include to fs/susfs.c"
+          sed -i '/^#include <linux\/susfs.h>$/a #include <linux\/security.h>' ./fs/susfs.c
+        fi
+
+        if grep -q 'susfs_open_redirect_spoof_vfs_statfs' ./fs/statfs.c && ! grep -q '^int susfs_open_redirect_spoof_vfs_statfs' ./fs/susfs.c; then
+          echo "Stubbing the missing susfs_open_redirect_spoof_vfs_statfs()"
+          cat >> ./fs/susfs.c <<'STUB'
+        int susfs_open_redirect_spoof_vfs_statfs(struct inode *inode, struct kstatfs *buf)
+        {
+          return 1;
+        }
+        STUB
+        fi
+
+        # SUSFS's OPEN_REDIRECT code unconditionally calls VMA_PAD_START(), which
+        # only exists on GKI branches that carry Google's page-size-migration
+        # feature (added to each android version's kernel/common branch at a
+        # different, sometime later, os_patch_level). Older os_patch_levels in
+        # our build matrix predate it, so fall back to a no-padding definition
+        # when the real header/macro isn't present. This is version-agnostic and
+        # a no-op wherever the real header already provides it.
+        if grep -q 'VMA_PAD_START(' ./fs/proc/task_mmu.c && ! grep -qE '#include <linux/pgsize_migration(_inline)?\.h>|define VMA_PAD_START' ./fs/proc/task_mmu.c; then
+          sed -i '\|#include "internal.h"|a\\n#undef VMA_PAD_START\n#ifndef VMA_PAD_START\n#define VMA_PAD_START(vma) ((vma)->vm_end)\n#endif' fs/proc/task_mmu.c
+          echo "Added VMA_PAD_START fallback definition to fs/proc/task_mmu.c"
+        fi
 
         # Revert Fake kernel patch
-        if [[ "$fake_patched_expand" = 1 ]]; then
+        if [[ "${fake_patched_expand}" = 1 ]]; then
           if [[ "${{ env.ANDROID_RELEASE }}" = "android15" ]] && [[ "${{ env.KERNEL_VERSION }}" = "6.6" ]]; then
             if grep -qF 'if (vma->vm_end > last_vma_end) {' ./fs/proc/task_mmu.c && ! grep -qxF 'SUSFS_IS_INODE_SUS_MAP' ./fs/proc/task_mmu.c; then
               perl -i -0pe 's/\t\t\tif \(vma->vm_end > last_vma_end\) \{\n\t\t\t\tsmap_gather_stats\(vma, &mss, last_vma_end\);\n\t\t\t\tlast_vma_end = vma->vm_end;\n\t\t\t\}/\t\t\tif (vma->vm_end > last_vma_end)\n\t\t\t\tsmap_gather_stats(vma, \&mss, last_vma_end);/' ./fs/proc/task_mmu.c
@@ -345,7 +412,7 @@ runs:
           fi
         fi
 
-        if [[ "$fake_patched" = 1 ]]; then
+        if [[ "${fake_patched}" = 1 ]]; then
           if [[ "${{ env.ANDROID_RELEASE }}" = "android15" ]] && [[ "${{ env.KERNEL_VERSION }}" = "6.6" ]]; then
             if grep -qxF $'\tunsigned int nr_subpages = __PAGE_SIZE / PAGE_SIZE;' ./fs/proc/task_mmu.c; then
               echo "nr_subpages Line found. Revert Fake Patching!"
@@ -452,24 +519,33 @@ runs:
         echo "::group::Adding SUSFS configs..."
         cd "${ROOT_DIR}/common"
 
+        # Function to compare semantic versions
+        version_lte() {
+          [[ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$1" ]]
+        }
+
         ./scripts/config --file arch/arm64/configs/kernel.config \
           -e CONFIG_KSU_SUSFS \
-          -e CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT \
           -e CONFIG_KSU_SUSFS_SUS_PATH \
           -e CONFIG_KSU_SUSFS_SUS_MOUNT \
-          -e CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT \
-          -e CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT \
           -e CONFIG_KSU_SUSFS_SUS_KSTAT \
-          -d CONFIG_KSU_SUSFS_SUS_OVERLAYFS \
-          -e CONFIG_KSU_SUSFS_TRY_UMOUNT \
-          -e CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT \
           -e CONFIG_KSU_SUSFS_SPOOF_UNAME \
           -e CONFIG_KSU_SUSFS_ENABLE_LOG \
           -e CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
           -e CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
           -e CONFIG_KSU_SUSFS_OPEN_REDIRECT \
-          -e CONFIG_KSU_SUSFS_SUS_MAP \
-          -d CONFIG_KSU_SUSFS_SUS_SU
+          -e CONFIG_KSU_SUSFS_SUS_MAP
+
+        if ! version_lte "2.1.0" "${susfs_version:-1}"; then
+          ./scripts/config --file arch/arm64/configs/kernel.config \
+            -e CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT \
+            -e CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT \
+            -e CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT \
+            -d CONFIG_KSU_SUSFS_SUS_OVERLAYFS \
+            -e CONFIG_KSU_SUSFS_TRY_UMOUNT \
+            -e CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT \
+            -d CONFIG_KSU_SUSFS_SUS_SU
+          fi
 
     - name: Add Oneplus BBR
       shell: bash

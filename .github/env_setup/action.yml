@@ -219,6 +219,7 @@ runs:
         git clone --depth=1 https://github.com/nullptr-t-oss/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
         git clone --depth=1 https://github.com/TheWildJames/kernel_patches.git
         git clone --depth=1 https://github.com/nullptr-t-oss/kernel_kit.git
+        git clone --depth=1 https://github.com/Bouteillepleine/kernel_patches.git -b main bouton_kernel_patches
 
     - name: Setup Base Environment
       shell: bash
@@ -227,6 +228,7 @@ runs:
 
         WILD_KERNEL_PATCHES="${GITHUB_WORKSPACE}/kernel_patches"
         KERNEL_KIT="${GITHUB_WORKSPACE}/kernel_kit"
+        BOUTON_KERNEL_PATCHES="${GITHUB_WORKSPACE}/bouton_kernel_patches"
         BUILD_CONFIG=${KERNEL_KIT}/device/${CODENAME}-${OS_SHORT}/build_config/build.config.${CODENAME}.${OS_SHORT}
         
 
@@ -257,6 +259,7 @@ runs:
 
         echo "WILD_KERNEL_PATCHES=${WILD_KERNEL_PATCHES}" >> "${GITHUB_ENV}"
         echo "KERNEL_KIT=${KERNEL_KIT}" >> "${GITHUB_ENV}"
+        echo "BOUTON_KERNEL_PATCHES=${BOUTON_KERNEL_PATCHES}" >> "${GITHUB_ENV}"
         echo "BUILD_CONFIG=${BUILD_CONFIG}" >> "${GITHUB_ENV}"
         echo "MTIME_CACHE=${MTIME_CACHE}" >> "${GITHUB_ENV}"
         echo "DYNAMIC_CACHE_DIR=${DYNAMIC_CACHE_DIR}" >> "${GITHUB_ENV}"
