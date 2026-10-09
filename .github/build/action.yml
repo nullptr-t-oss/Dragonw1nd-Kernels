@@ -587,6 +587,7 @@ runs:
             ../vendor/oplus/kernel/explorer
             ../vendor/qcom/opensource/video-driver
             ../vendor/qcom/opensource/graphics-kernel
+            ../vendor/qcom/opensource/touch-drivers
             ../vendor/qcom/opensource/dataipa/drivers/platform/msm
             ../vendor/qcom/opensource/datarmnet/core
             ../vendor/qcom/opensource/datarmnet-ext/aps
