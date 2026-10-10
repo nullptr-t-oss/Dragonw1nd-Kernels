@@ -558,6 +558,7 @@ runs:
           -e CONFIG_TCP_CONG_ADVANCED \
           -e CONFIG_TCP_CONG_BBR \
           -e CONFIG_TCP_CONG_BBR3 \
+          -e CONFIG_TCP_CONG_ROCCET \
           -e CONFIG_NET_SCH_FQ \
           -e CONFIG_NET_SCH_FQ_CODEL
 
