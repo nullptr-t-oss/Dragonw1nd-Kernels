@@ -275,6 +275,14 @@ runs:
               CONFIGS+=("vendor/oplus/${SOC}_GKI.config")
             fi
 
+            if [[ -f "${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/vendor/${SOC}_perf.config" ]]; then
+              CONFIGS+=("vendor/${SOC}_perf.config")
+            fi
+
+            if [[ -f "${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/vendor/${SOC}_oplus_common.config" ]]; then
+              CONFIGS+=("vendor/${SOC}_oplus_common.config")
+            fi
+
             if [[ -f "${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/vendor/debugfs.config" ]]; then
               CONFIGS+=("vendor/debugfs.config")
             fi
