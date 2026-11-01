@@ -66,7 +66,7 @@ runs:
         SUBLEVEL=$(echo ${KERNEL_VERSION_MAKE} | cut -d'.' -f3)
 
         echo "ANDROID_RELEASE=${ANDROID_RELEASE}" >> "${GITHUB_ENV}"
-        echo "kernelversion=${ANDROID_RELEASE}-${KERNEL_VERSION_MAKE}" >> "${GITHUB_ENV}"
+        echo "kernelversion=${KERNEL_VERSION_MAKE}" >> "${GITHUB_ENV}"
         echo "SUSFS_KERNEL_BRANCH=gki-${ANDROID_RELEASE}-${VERSION}.${PATCHLEVEL}" >> "${GITHUB_ENV}"
         echo "kernel_version=${ANDROID_RELEASE}-${KERNEL_VERSION_MAKE}" >> "${GITHUB_OUTPUT}"
 
