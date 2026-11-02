@@ -68,6 +68,10 @@ on:
           - aosp-clang-r563880
           - aosp-clang-r563880c
           - aosp-clang-r574158
+          - aosp-clang-r584948
+          - aosp-clang-r584948b
+          - aosp-clang-r596125
+          - aosp-clang-r614150
         default: 'default'
       kernel_uname:
         description: 'Kernel uname'
