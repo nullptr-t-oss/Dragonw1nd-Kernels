@@ -24,6 +24,11 @@ inputs:
     required: false
     type: string
     default: 'false'
+  mlgo:
+    description: 'enable mlgo [Machine Learning Guided Optimization] (requires compiler support)'
+    required: false
+    type: string
+    default: false
 
 outputs:
   kernel_sha256:
@@ -358,7 +363,11 @@ runs:
           ( cd ${OUT} && make "${MAKE_FLAGS[@]}" O="${OUT}" olddefconfig ) 
         }
 
-  
+        # mlgo support
+        if [[ "${{ inputs.mlgo }}" == "true"  && -z "${KCFLAGS:-}" ]]; then
+          export KCFLAGS="-mllvm -regalloc-enable-advisor=release"
+        fi
+
         # end of utility functions
 
         cd "${ROOT_DIR}"

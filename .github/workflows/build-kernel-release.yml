@@ -111,6 +111,11 @@ on:
           - REDMI_15
           - REDMI_12
         default: OP11
+      mlgo:
+        description: 'enable mlgo [Machine Learning Guided Optimization] (requires compiler support)'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   set-model:
@@ -319,6 +324,7 @@ jobs:
           lto: ${{ inputs.lto }}
           kernel_uname: ${{ inputs.kernel_uname }}
           compile_dlkm: ${{ inputs.compile_dlkm }}
+          mlgo: ${{ inputs.mlgo }}
 
       - name: Distribution
         id: distribution
