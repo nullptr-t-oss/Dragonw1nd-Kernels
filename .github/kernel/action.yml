@@ -280,141 +280,57 @@ runs:
             ;;
         esac
         cd "${ROOT_DIR}/${KERNEL_DIR}"
-        if [[ "${{ env.ANDROID_RELEASE }}" = "android15" ]] && [[ "${{ env.KERNEL_VERSION }}" = "6.6" ]]; then
-          if ! grep -qxF '#include <trace/hooks/fs.h>' ./fs/namespace.c; then
-            sed -i '/#include <trace\/hooks\/blk.h>/a #include <trace\/hooks\/fs.h>' ./fs/namespace.c
-          fi
 
-          if ! grep -qxF 'extern void __fold_filemap_fixup_entry(struct vma_iterator *iter, unsigned long *end);' ./include/linux/page_size_compat.h; then
-            patch -p1 < "${WILD_KERNEL_PATCHES}/common/backports/fold_fixup_entries.patch"
+        COMPAT_PY="${GITHUB_WORKSPACE}/scripts/kernel_fix_patches/fix_susfs_compatibility_patches.py"
+        # Outside the kernel tree so git clean / repo sync cannot wipe it.
+        COMPAT_STATE="${RUNNER_TEMP}/susfs-compat-state-${ANDROID_RELEASE}-${KERNEL_VERSION}.json"
+
+        KMI="${ANDROID_RELEASE}-${KERNEL_VERSION}"
+        MAIN_PATCH="${susfs_dir}/kernel_patches/50_add_susfs_in_${SUSFS_KERNEL_BRANCH}.patch"
+        SUBLEVEL="${kernelversion##*.}"
+
+        if ! [[ "${SUBLEVEL}" =~ ^[0-9]+$ ]]; then
+          echo "ERROR: could not parse SUBLEVEL from kernelversion=${kernelversion}" >&2
+          exit 1
+        fi
+
+        echo "KMI=${KMI} SUBLEVEL=${SUBLEVEL}"
+
+        python3 "$COMPAT_PY" --stage 1 --root "${ROOT_DIR}/${KERNEL_DIR}" --kmi "${KMI}" --sublevel "${SUBLEVEL}" --soc "${SOC}" --state "${COMPAT_STATE}"
+
+        # Stays in the workflow: Python never invokes `patch`.
+        if [ "${ANDROID_RELEASE}" = "android15" ] && [ "${KERNEL_VERSION}" = "6.6" ]; then
+          if ! grep -qxF 'extern void __fold_filemap_fixup_entry(struct vma_iterator *iter, unsigned long *end);' \
+              ./include/linux/page_size_compat.h; then
+            patch -p1 --forward --batch --fuzz=0 \
+              < "${WILD_KERNEL_PATCHES}/common/backports/fold_fixup_entries.patch"
           fi
         fi
 
-        # Fake kernel patch to fix failures
-        fake_patched=0
-        fake_patched_expand=0
-        if [[ "${{ env.ANDROID_RELEASE }}" = "android15" ]] && [[ "${{ env.KERNEL_VERSION }}" = "6.6" ]]; then
-          if ! grep -qxF $'\tunsigned int nr_subpages = __PAGE_SIZE / PAGE_SIZE;' ./fs/proc/task_mmu.c; then
-            echo "nr_subpages Line not found. Fake Patching!"
-            sed -i -e '/int ret = 0, copied = 0;/a \\tunsigned int nr_subpages \= __PAGE_SIZE \/ PAGE_SIZE;' -e '/int ret = 0, copied = 0;/a \\tpagemap_entry_t \*res = NULL;' ./fs/proc/task_mmu.c
-            fake_patched=1
-          fi
+        function can_apply() {
+          patch --dry-run --forward --batch -p1 < "$1" >/tmp/susfs-patch-dryrun.log 2>&1
+        }
 
-          if ! grep -qxF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
-            echo "#include <linux/dma-buf.h> Line not found. Adding missing header"
-            sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
-          fi
+        function apply_patch() {
+          patch --forward --batch -p1 < "$1"
+        }
 
-          if ! grep -qxF '#include <linux/zswap.h>' ./mm/memory.c; then
-            echo "#include <linux/zswap.h> Line not found. Adding missing header"
-            sed -i '/#include <linux\/sched\/sysctl.h>/a #include <linux\/zswap.h>' ./mm/memory.c
-          fi
-
-          if grep -qF 'if (vma->vm_end > last_vma_end)' ./fs/proc/task_mmu.c && ! grep -qxF 'SUSFS_IS_INODE_SUS_MAP' ./fs/proc/task_mmu.c; then
-            echo "Temporarily expand the last_vma_end if block to fix a matching issue."
-            perl -i -0pe 's/\t\t\tif \(vma->vm_end > last_vma_end\)\n\t\t\t\tsmap_gather_stats\(vma, &mss, last_vma_end\);/\t\t\tif (vma->vm_end > last_vma_end) {\n\t\t\t\tsmap_gather_stats(vma, \&mss, last_vma_end);\n\t\t\t\tlast_vma_end = vma->vm_end;\n\t\t\t}/' ./fs/proc/task_mmu.c
-            fake_patched_expand=1
-          fi
-        fi
-
-        if [[ "${{ env.ANDROID_RELEASE }}" = "android12" ]] && [[ "${{ env.KERNEL_VERSION }}" = "5.10" ]]; then
-          if ! grep -qxF $'\tif (!vma_pages(vma))' ./fs/proc/task_mmu.c; then
-            echo "vma_pages Line not found. Fake Patching!"
-            fake_patched=1
-          fi
-        fi
-
-        if [[ "${{ env.ANDROID_RELEASE }}" = "android13" ]] && [[ "${{ env.KERNEL_VERSION }}" = "5.15" ]]; then
-          if ! grep -qxF $'\tif (!vma_pages(vma))' ./fs/proc/task_mmu.c; then
-            echo "vma_pages Line not found. Fake Patching!"
-            fake_patched=1
-          fi
-
-          if grep -qxF '#include <linux/swap_slots.h>' ./mm/memory.c; then
-            echo "#include swap_slots.h> Line found. Deleting header."
-            sed -i '/#include <linux\/swap_slots.h>/d' ./mm/memory.c
-            fake_patched=1
-          fi
-        fi
-
-        if [[ "${{ env.ANDROID_RELEASE }}" = "android14" ]] && [[ "${{ env.KERNEL_VERSION }}" = "6.1" ]]; then
-          if ! grep -qxF $'\tif (!vma_pages(vma))' ./fs/proc/task_mmu.c; then
-            echo "vma_pages Line not found. Fake Patching!"
-            fake_patched=1
-          fi
-
-          if ! grep -qxF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
-            echo "#include <linux/dma-buf.h> Line not found. Adding missing header"
-            sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
-          fi
-        fi
-
-
-        if patch -p1 -s -N --dry-run -i "${susfs_dir}/kernel_patches/50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }}.patch" >/dev/null 2>&1; then
-          echo "Applying patch: 50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }}"
-          patch -p1 -N -i "${susfs_dir}/kernel_patches/50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }}.patch"
+        if can_apply "${MAIN_PATCH}"; then
+          apply_patch "${MAIN_PATCH}"
         else
-          if [[ -f "${KERNEL_KIT}/kernel_patches/${CODENAME}-${OS_SHORT}/susfs/50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }}.patch" ]]; then
-            echo "Applying fix susfs patch"
-            patch -p1 -N -i "${KERNEL_KIT}/kernel_patches/${CODENAME}-${OS_SHORT}/susfs/50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }}.patch"
+          echo "ERROR: main SUSFS patch does not apply cleanly (fuzz=0)" >&2
+          cat /tmp/susfs-patch-dryrun.log >&2
+          # If a full alternate patch exists for this branch, dry-run it and
+          # apply ONLY that file instead — never apply main then patch .rej output.
+          FIX_PATCH="${susfs_dir}/kernel_patches/fix_50_add_susfs_in_${SUSFS_KERNEL_BRANCH}.patch"
+          if [ -f "${FIX_PATCH}" ] && can_apply "${FIX_PATCH}"; then
+            apply_patch "${FIX_PATCH}"
           else
-            echo "Failed to apply 50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }} patch! "
             exit 1
           fi
         fi
 
-        # SUSFS's OPEN_REDIRECT code unconditionally calls VMA_PAD_START(), which
-        # only exists on GKI branches that carry Google's page-size-migration
-        # feature (added to each android version's kernel/common branch at a
-        # different, sometime later, os_patch_level). Older os_patch_levels in
-        # our build matrix predate it, so fall back to a no-padding definition
-        # when the real header/macro isn't present. This is version-agnostic and
-        # a no-op wherever the real header already provides it.
-        if grep -q 'VMA_PAD_START(' ./fs/proc/task_mmu.c && ! grep -qE '#include <linux/pgsize_migration(_inline)?\.h>|define VMA_PAD_START' ./fs/proc/task_mmu.c; then
-          sed -i '\|#include "internal.h"|a\\n#undef VMA_PAD_START\n#ifndef VMA_PAD_START\n#define VMA_PAD_START(vma) ((vma)->vm_end)\n#endif' fs/proc/task_mmu.c
-          echo "Added VMA_PAD_START fallback definition to fs/proc/task_mmu.c"
-        fi
-
-        # Revert Fake kernel patch
-        if [[ "${fake_patched_expand}" = 1 ]]; then
-          if [[ "${{ env.ANDROID_RELEASE }}" = "android15" ]] && [[ "${{ env.KERNEL_VERSION }}" = "6.6" ]]; then
-            if grep -qF 'if (vma->vm_end > last_vma_end) {' ./fs/proc/task_mmu.c && ! grep -qxF 'SUSFS_IS_INODE_SUS_MAP' ./fs/proc/task_mmu.c; then
-              perl -i -0pe 's/\t\t\tif \(vma->vm_end > last_vma_end\) \{\n\t\t\t\tsmap_gather_stats\(vma, &mss, last_vma_end\);\n\t\t\t\tlast_vma_end = vma->vm_end;\n\t\t\t\}/\t\t\tif (vma->vm_end > last_vma_end)\n\t\t\t\tsmap_gather_stats(vma, \&mss, last_vma_end);/' ./fs/proc/task_mmu.c
-            fi
-          fi
-        fi
-
-        if [[ "${fake_patched}" = 1 ]]; then
-          if [[ "${{ env.ANDROID_RELEASE }}" = "android15" ]] && [[ "${{ env.KERNEL_VERSION }}" = "6.6" ]]; then
-            if grep -qxF $'\tunsigned int nr_subpages = __PAGE_SIZE / PAGE_SIZE;' ./fs/proc/task_mmu.c; then
-              echo "nr_subpages Line found. Revert Fake Patching!"
-              sed -i -e '/unsigned int nr_subpages \= __PAGE_SIZE \/ PAGE_SIZE;/d' -e '/pagemap_entry_t \*res = NULL;/d' ./fs/proc/task_mmu.c
-            fi
-          fi
-          if [[ "${{ env.ANDROID_RELEASE }}" = "android12" ]] && [[ "${{ env.KERNEL_VERSION }}" = "5.10" ]]; then
-            if grep -qxF $'\t\t\tgoto show_pad;' ./fs/proc/task_mmu.c; then
-              echo "vma_pages Line found. Revert Fake Patching!"
-              sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
-            fi
-          fi
-          if [[ "${{ env.ANDROID_RELEASE }}" = "android13" ]] && [[ "${{ env.KERNEL_VERSION }}" = "5.15" ]]; then
-            if grep -qxF $'\t\t\tgoto show_pad;' ./fs/proc/task_mmu.c; then
-              echo "vma_pages Line found. Revert Fake Patching!"
-              sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
-            fi
-
-            if ! grep -qxF '#include <linux/swap_slots.h>' ./mm/memory.c; then
-              echo "#include <linux/swap_slots.h> Line not found. Adding missing header"
-              sed -i '/#include <linux\/vmalloc.h>/a #include <linux\/swap_slots.h>' ./mm/memory.c
-            fi
-          fi
-          if [[ "${{ env.ANDROID_RELEASE }}" = "android14" ]] && [[ "${{ env.KERNEL_VERSION }}" = "6.1" ]]; then
-            if grep -qxF $'\t\t\tgoto show_pad;' ./fs/proc/task_mmu.c; then
-              echo "vma_pages Line found. Revert Fake Patching!"
-              sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
-            fi
-          fi
-        fi
+        python3 "${COMPAT_PY}" --stage 2 --root "${ROOT_DIR}/${KERNEL_DIR}" --kmi "${KMI}" --sublevel "${SUBLEVEL}" --soc "${SOC}" --state "${COMPAT_STATE}"
 
         echo "FEATURES=${FEATURES:-} susfs" >> "${GITHUB_ENV}"
 
