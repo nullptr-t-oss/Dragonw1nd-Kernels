@@ -363,9 +363,21 @@ runs:
           ( cd ${OUT} && make "${MAKE_FLAGS[@]}" O="${OUT}" olddefconfig ) 
         }
 
-        # mlgo support
+        # mlgo support ; note: dont set mlgo if KCFLAGS is already set to honor
+        #                      build config flags since a lot of customization
+        #                      can be done here depending on the toolchain used
         if [[ "${{ inputs.mlgo }}" == "true"  && -z "${KCFLAGS:-}" ]]; then
           export KCFLAGS="-mllvm -regalloc-enable-advisor=release"
+        fi
+
+        # cpu tuning support ; define in build_config or device json
+        if [[ -n "${CPU_TUNE:-}" ]]; then
+          export KCFLAGS="${KCFLAGS:-} -mtune=${CPU_TUNE}"
+        fi
+
+        # debug
+        if [[ -n "${KCFLAGS:-}" ]]; then
+          echo "KCFLAGS: ${KCFLAGS}"
         fi
 
         # end of utility functions

@@ -9,6 +9,7 @@
   "qcacld_dev_name": "kiwi_v2",
   "clang": "manifest",
   "tree": "mixed",
+  "cpu_tune": "cortex-a715",
   "manifest_oos14": {
     "url": "https://raw.githubusercontent.com/nullptr-t-oss/kernel_kit/refs/heads/main/kernel_manifest/oneplus/oneplus_11_u.xml",
     "os": "OxygenOS 14",
