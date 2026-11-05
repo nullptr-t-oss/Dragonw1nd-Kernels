@@ -1254,7 +1254,7 @@ runs:
         if [[ -d "${PREBUILTS}/first_stage_ramdisk" ]]; then
           mkdir -p "${RAMDISK_STAGING_DIR}/first_stage_ramdisk"
           shopt -s nullglob
-          cp "${PREBUILTS}/first_stage_ramdisk"/* "${RAMDISK_STAGING_DIR}/first_stage_ramdisk"
+          cp -r "${PREBUILTS}/first_stage_ramdisk"/* "${RAMDISK_STAGING_DIR}/first_stage_ramdisk"
           shopt -u nullglob
         else
           echo "WARNING: first_stage_ramdisk folder is missing for vendor boot partition in PREBUILTS dir" >&2
@@ -1262,7 +1262,7 @@ runs:
 
         if [[ -d "${PREBUILTS}/ramdisk" ]]; then
           shopt -s nullglob
-          cp --parents "${PREBUILTS}/ramdisk"/* "${RAMDISK_STAGING_DIR}/"
+          cp -r --parents "${PREBUILTS}/ramdisk"/* "${RAMDISK_STAGING_DIR}/"
           shopt -u nullglob
         fi
 
