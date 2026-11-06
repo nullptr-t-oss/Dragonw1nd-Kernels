@@ -7,8 +7,9 @@
   "boot_partition_size": "201326592",
   "vendor_boot_partition_size": "201326592",
   "qcacld_dev_name": "kiwi_v2",
-  "clang": "manifest",
+  "clang": "aosp-clang-r614150",
   "tree": "mixed",
+  "cpu_tune": "cortex-a715",
   "manifest_oos14": {
     "url": "https://raw.githubusercontent.com/nullptr-t-oss/kernel_kit/refs/heads/main/kernel_manifest/oneplus/oneplus_11_u.xml",
     "os": "OxygenOS 14",

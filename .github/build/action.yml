@@ -24,6 +24,11 @@ inputs:
     required: false
     type: string
     default: 'false'
+  mlgo:
+    description: 'enable mlgo [Machine Learning Guided Optimization] (requires compiler support)'
+    required: false
+    type: string
+    default: false
 
 outputs:
   kernel_sha256:
@@ -217,13 +222,13 @@ runs:
         set -euo pipefail
         echo "::group::Applying Kernel Branding..."
         cd "${ROOT_DIR}/common"
-        if [[ -n "$INPUT_UNAME" ]]; then
-          CUSTOM_LOCALVERSION="-${ANDROID_RELEASE}-${{ inputs.kernel_uname }}"
-          echo "CUSTOM_LOCALVERSION=$CUSTOM_LOCALVERSION" >> "${GITHUB_ENV}"
-          echo "::note::Using kernel version: ${kernelversion}${CUSTOM_LOCALVERSION}"
+        if [[ -n "${INPUT_UNAME}" ]]; then
+          CUSTOM_LOCALVERSION="${{ inputs.kernel_uname }}"
+          echo "CUSTOM_LOCALVERSION=${CUSTOM_LOCALVERSION}" >> "${GITHUB_ENV}"
+          echo "::note::Using kernel version: ${kernelversion}-${ANDROID_RELEASE}-${CUSTOM_LOCALVERSION}"
         else
           SCM=$(./scripts/setlocalversion 2>/dev/null || echo "-g$(git rev-parse --short HEAD)") || echo "ERROR"
-          echo "::note::Using default kernel version: ${kernelversion}${SCM}"
+          echo "::note:: Using default kernel version: ${kernelversion}-${SCM}"
         fi
 
         echo "Kernel branding applied ✅"
@@ -275,6 +280,14 @@ runs:
               CONFIGS+=("vendor/oplus/${SOC}_GKI.config")
             fi
 
+            if [[ -f "${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/vendor/${SOC}_perf.config" ]]; then
+              CONFIGS+=("vendor/${SOC}_perf.config")
+            fi
+
+            if [[ -f "${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/vendor/${SOC}_oplus_common.config" ]]; then
+              CONFIGS+=("vendor/${SOC}_oplus_common.config")
+            fi
+
             if [[ -f "${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/vendor/debugfs.config" ]]; then
               CONFIGS+=("vendor/debugfs.config")
             fi
@@ -299,7 +312,7 @@ runs:
             if [[ -n "${CUSTOM_LOCALVERSION:-}" ]]; then
               : > "${KERNEL_DIR}/.scmversion"
               ${KERNEL_DIR}/scripts/config --file "${OUT}/.config" \
-                --set-str LOCALVERSION "${CUSTOM_LOCALVERSION}" \
+                --set-str LOCALVERSION "-${ANDROID_RELEASE}-${CUSTOM_LOCALVERSION}" \
                 -d LOCALVERSION_AUTO
               sed -i 's/scm_version="$(scm_version --short)"/scm_version=""/' ${KERNEL_DIR}/scripts/setlocalversion
               echo "::note:: Custom branding applied to config"
@@ -350,7 +363,23 @@ runs:
           ( cd ${OUT} && make "${MAKE_FLAGS[@]}" O="${OUT}" olddefconfig ) 
         }
 
-  
+        # mlgo support ; note: dont set mlgo if KCFLAGS is already set to honor
+        #                      build config flags since a lot of customization
+        #                      can be done here depending on the toolchain used
+        if [[ "${{ inputs.mlgo }}" == "true"  && -z "${KCFLAGS:-}" ]]; then
+          export KCFLAGS="-mllvm -regalloc-enable-advisor=release"
+        fi
+
+        # cpu tuning support ; define in build_config or device json
+        if [[ -n "${CPU_TUNE:-}" ]]; then
+          export KCFLAGS="${KCFLAGS:-} -mtune=${CPU_TUNE}"
+        fi
+
+        # debug
+        if [[ -n "${KCFLAGS:-}" ]]; then
+          echo "KCFLAGS: ${KCFLAGS}"
+        fi
+
         # end of utility functions
 
         cd "${ROOT_DIR}"
@@ -664,7 +693,11 @@ runs:
       run: |
         echo "WARNING: Deleting build cache..." >&2
 
-        find "${OUT_DIR}/gki-kernel/modules_staging/lib/modules" -mindepth 1 -maxdepth 1 -type d ! -name "${gki_kernel_release}" -exec rm -rfv {} +
+        if [[ -n "${CUSTOM_LOCALVERSION:-}" ]]; then
+          find "${OUT_DIR}/gki-kernel/modules_staging/lib/modules" -mindepth 1 -maxdepth 1 -type d ! -name "${kernelversion}-${ANDROID_RELEASE}-${CUSTOM_LOCALVERSION}" -exec rm -rfv {} +
+        else
+          find "${OUT_DIR}/gki-kernel/modules_staging/lib/modules" -mindepth 1 -maxdepth 1 -type d ! -name "${gki_kernel_release}" -exec rm -rfv {} +
+        fi
 
         if [[ "${TREE}" == "mixed" ]]; then
             find "${OUT_DIR}/msm-kernel/modules_staging/lib/modules" -mindepth 1 -maxdepth 1 -type d ! -name "${msm_kernel_release}" -exec rm -rfv {} +
@@ -1221,7 +1254,7 @@ runs:
         if [[ -d "${PREBUILTS}/first_stage_ramdisk" ]]; then
           mkdir -p "${RAMDISK_STAGING_DIR}/first_stage_ramdisk"
           shopt -s nullglob
-          cp "${PREBUILTS}/first_stage_ramdisk"/* "${RAMDISK_STAGING_DIR}/first_stage_ramdisk"
+          cp -r "${PREBUILTS}/first_stage_ramdisk"/* "${RAMDISK_STAGING_DIR}/first_stage_ramdisk"
           shopt -u nullglob
         else
           echo "WARNING: first_stage_ramdisk folder is missing for vendor boot partition in PREBUILTS dir" >&2
@@ -1229,7 +1262,7 @@ runs:
 
         if [[ -d "${PREBUILTS}/ramdisk" ]]; then
           shopt -s nullglob
-          cp --parents "${PREBUILTS}/ramdisk"/* "${RAMDISK_STAGING_DIR}/"
+          cp -r --parents "${PREBUILTS}/ramdisk"/* "${RAMDISK_STAGING_DIR}/"
           shopt -u nullglob
         fi
 
