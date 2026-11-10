@@ -263,7 +263,7 @@ runs:
                 patch -p1 --forward -i "${WILD_KERNEL_PATCHES}/next/susfs_fix_patches/${susfs_version}/multi_sepolicy_fix.patch"
             fi
             ;;
-          "v2.2.0" | "v2.3.0")
+          "v2.2.0" | "v2.3.0" | "v2.4.0")
             patch -p1 --forward < "${susfs_dir}/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
             for file in $(find ./kernel -maxdepth 2 -name "*.rej" -exec basename {} .rej \;); do
               echo "Patching file: ${file} with fix_${file}.patch"
