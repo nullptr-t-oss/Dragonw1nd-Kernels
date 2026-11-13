@@ -404,7 +404,7 @@ runs:
           MAKE_GOALS+=" dtbs"
         fi
         # Force /__symbols__ generation for all DTB[O]s
-        export DTC_FLAGS="-@"
+        export DTC_FLAGS="-@ -q"
         export MSM_ARCH="${SOC}"
         export DTB_TYPES="${MSM_ARCH}-overlays-"
         OUT="${OUT_DIR}/gki-kernel"
