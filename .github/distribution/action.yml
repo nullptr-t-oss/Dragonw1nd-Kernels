@@ -241,6 +241,7 @@ runs:
           --ksun-version "${{ inputs.ksun_version }}" \
           --ksun-commit-url "${KSUN_COMMIT_URL}" \
           --build-start "${{ inputs.build_start }}" \
+          --build-time "${BUILD_TIME}" \
           "${BANNER_ARGS[@]}" \
           "${FEAT_ARGS[@]}" \
           "${FILE_ARGS[@]}"

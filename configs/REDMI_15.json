@@ -6,7 +6,7 @@
   "branch": "dummy",
   "boot_partition_size": "100663296",
   "vendor_boot_partition_size": "100663296",
-  "qcacld_dev_name": "",
+  "qcacld_dev_name": "wlan",
   "clang": "manifest",
   "tree": "monolithic",
   "manifest_custom": {

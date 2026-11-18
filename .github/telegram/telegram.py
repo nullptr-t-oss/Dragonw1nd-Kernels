@@ -9,6 +9,7 @@ Usage:
         --feat realtek --feat ath --feat can_slcan \
         --file /path/to/Dragonw1nd.zip --file /path/to/boot.img \
         --build-start 1757930400
+        --build-time 15m 20s
 
 Secrets (bot token / chat id / thread id) are read from environment
 variables, not CLI args, so they never show up in a process listing or
@@ -67,6 +68,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ksun-commit-url", default="", help="If set, the KSU version cell becomes a clickable chip linking here.")
 
     p.add_argument("--build-start", type=int, required=True, help="Unix epoch seconds when the build started.")
+    p.add_argument("--build-time", default="")
     p.add_argument("--debug-bundle", action="store_true", help="Minimal message: heading, info table, the attached file(s), build time — no banner/release-chip/feature-tree. For internal debug-archive pings, not the main release message.")
 
     p.add_argument("--bot-token", default=os.environ.get("TELEGRAM_BOT_TOKEN"))
@@ -166,7 +168,7 @@ def build_message(args: argparse.Namespace, ctx: bi.GitHubContext) -> tuple[str,
     files_md, media, attach_paths = build_files_block(entries)
 
     now = int(time.time())
-    duration = bi.format_duration(now - args.build_start)
+    duration = args.build_time
     start_human = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(args.build_start))
 
     parts = []
