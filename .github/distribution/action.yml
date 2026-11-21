@@ -81,7 +81,11 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.CODENAME }}-${{ env.OS_SHORT }}
-        path: ${{ env.DIST_DIR }}/
+        path: |
+          ${{ env.DIST_DIR }}
+          ${{ env.DIST_DIR }}/*.tar.gz
+          ${{ env.DIST_DIR }}/*.zip
+          ${{ env.DIST_DIR }}/*.img
 
     - name: Resolve kernel uname from Image
       id: kernel_uname
