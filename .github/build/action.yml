@@ -680,15 +680,20 @@ runs:
             mkdir -p "${OUT}/${PROJECT_REL}"
 
             make -C "${PROJECT}" M="${PROJECT_REL}" "${MAKE_FLAGS[@]}" O=${OUT}
-            # Copy .dtb and .dtbo files into INSTALL_DTBS_PATH
-            if [[ -d "${OUT}/${PROJECT_REL}" ]]; then
-                (
-                  cd "${OUT}/${PROJECT_REL}" && \
-                  find . -type f \( -name "*.dtb" -o -name "*.dtbo" \) -exec cp --parents -f {} "${INSTALL_DTBS_PATH}/" \;
-                )
-              fi
             set +x
           done
+          _line
+
+          echo " Copying dtbs and dtbos to INSTALL_DTBS_PATH"
+          set -x
+          # Copy .dtb and .dtbo files into INSTALL_DTBS_PATH
+          # dtbs are installed in : ${OUT}/${PROJECT_REL}
+          # which is nothing but the ROOT_DIR
+          (
+            cd "${ROOT_DIR}" && \
+            find vendor/ -type f \( -name "*.dtb" -o -name "*.dtbo" \) -exec cp --parents -fv {} "${INSTALL_DTBS_PATH}/" \;
+          )
+          set +x
           _line
         fi
 
@@ -702,7 +707,7 @@ runs:
         DTBS_ARCHIVE="dtbs_staging.tar.gz"
         # Create dtb staging archive
         (
-          echo " Archiving GKI modules to ${DTBS_ARCHIVE}"
+          echo " Archiving dtbs to ${DTBS_ARCHIVE}"
           tar -czf "${DIST_DIR}/${DTBS_ARCHIVE}" -C "${DTBS_STAGING_DIR}" .
         )
 
