@@ -77,11 +77,29 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Upload Artifacts
+    - name: Upload DIST_DIR
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.CODENAME }}-${{ env.OS_SHORT }}
-        path: ${{ env.DIST_DIR }}/
+        name: ${{ env.CODENAME }}-${{ env.OS_SHORT }}-DIST_DIR
+        path: ${{ env.DIST_DIR }}
+
+    - name: Upload tar archives
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.CODENAME }}-${{ env.OS_SHORT }}-archives
+        path: ${{ env.DIST_DIR }}/*.tar.gz
+
+    - name: Upload zip archives - AK3
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.CODENAME }}-${{ env.OS_SHORT }}-ak3
+        path: ${{ env.DIST_DIR }}/*.zip
+
+    - name: Upload partition images
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.CODENAME }}-${{ env.OS_SHORT }}-partitions
+        path:  ${{ env.DIST_DIR }}/*.img
 
     - name: Resolve kernel uname from Image
       id: kernel_uname
