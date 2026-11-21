@@ -698,6 +698,14 @@ runs:
         set +x
         _line
 
+        DTBS_STAGING_DIR="${INSTALL_DTBS_PATH}"
+        DTBS_ARCHIVE="dtbs_staging.tar.gz"
+        # Create dtb staging archive
+        (
+          echo " Archiving GKI modules to ${DTBS_ARCHIVE}"
+          tar -czf "${DIST_DIR}/${DTBS_ARCHIVE}" -C "${DTBS_STAGING_DIR}" .
+        )
+
         echo "duration=${SECONDS}" >> "${GITHUB_OUTPUT}"
 
     - name: Cleanup old build cache
