@@ -557,12 +557,6 @@ runs:
         # Rename file name since modules to be archived from now on are either full set of modules (monolithic tress) or devive-kernel modules
         MODULES_ARCHIVE=modules.tar.gz
 
-        set -x
-        echo " Copying dtbs and dtbos to DIST_DIR"
-        cp $(find ${INSTALL_DTBS_PATH} -type f \( -name "*.dtb" -o -name "*.dtbo" \)) ${DIST_DIR} || true
-        set +x
-        _line
-
 
         # Exports for external kernel modules
         export BOARD_PLATFORM="${SOC}"
@@ -674,17 +668,35 @@ runs:
         if [[ "${SOC_VENDOR:-qcom}" == "qcom" ]]; then
           echo "Compiling vendor devicetree overlays"
 
-          for PROJECT in $(cd "${ANDROID_BUILD_TOP}" && find -L vendor/ -maxdepth 4 -type d -name "*-devicetree"); do
-            if [[ ! -e "../${PROJECT}/Makefile" ]]; then
+          for PROJECT in $(cd "${ROOT_DIR}" && find -L ../vendor/ -maxdepth 4 -type d -name "*-devicetree"); do
+            if [[ ! -e "${PROJECT}/Makefile" ]]; then
               echo "${PROJECT} does not have expected build configuration files, skipping..."
               continue
             fi
             set -x
-            make -C "../${PROJECT}" M="../../${PROJECT}" "${MAKE_FLAGS[@]}" O=${OUT}
+
+            #  The path that we pass in via the variable M needs to be a relative path relative to the kernel source directory
+            PROJECT_REL=$(realpath -s --relative-to="${KERNEL_DIR}" "${ROOT_DIR}/${PROJECT}")
+            mkdir -p "${OUT}/${PROJECT_REL}"
+
+            make -C "${PROJECT}" M="${PROJECT_REL}" "${MAKE_FLAGS[@]}" O=${OUT}
+            # Copy .dtb and .dtbo files into INSTALL_DTBS_PATH
+            if [[ -d "${OUT}/${PROJECT_REL}" ]]; then
+                (
+                  cd "${OUT}/${PROJECT_REL}" && \
+                  find . -type f \( -name "*.dtb" -o -name "*.dtbo" \) -exec cp --parents -f {} "${INSTALL_DTBS_PATH}/" \;
+                )
+              fi
             set +x
           done
           _line
         fi
+
+        set -x
+        echo " Copying dtbs and dtbos to DIST_DIR"
+        cp $(find ${INSTALL_DTBS_PATH} -type f \( -name "*.dtb" -o -name "*.dtbo" \)) ${DIST_DIR} || true
+        set +x
+        _line
 
         echo "duration=${SECONDS}" >> "${GITHUB_OUTPUT}"
 
