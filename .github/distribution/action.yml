@@ -266,6 +266,7 @@ runs:
           --clang-version "${CLANG_VERSION}" \
           --ksun-version "${{ inputs.ksun_version }}" \
           --build-start "${{ inputs.build_start }}" \
+          --build-time "${BUILD_TIME}" \
           --debug-bundle \
           --file "${{ steps.tg_debug_zip.outputs.zip_path }}"
 
