@@ -766,6 +766,7 @@ runs:
       if: ${{ inputs.compile_dlkm == 'true' }}
       shell: bash
       run: |
+        cd "${ROOT_DIR}"
         if [[ -f "${BUILD_CONFIG}" ]]; then
           echo "::debug:: Inheriting build config: ${BUILD_CONFIG}"
           set -a
@@ -780,20 +781,29 @@ runs:
         fi
 
         PREBUILTS="${KERNEL_KIT}/device/${CODENAME}-${OS_SHORT}/vendor_boot"
-        if [[ -f "${PREBUILTS}/dtb" ]]; then
+        DTB_STAGING="${OUT}/dtb_staging"
+        if [[ -v DTB_MERGE_CMDS ]]; then
+          echo -e "::debug:: Evaluating DTB_MERGE_CMDS inside $(pwd)"
+          set -x
+          eval "${DTB_MERGE_CMDS}"
+          set +x
+
+          # if the dtb merge order is not sorted use DTB_MERGE_CMDS instead
+          if [[ "${DTB_MERGE_SORTED:-0}" == "1" ]]; then
+            # find "${DTB_STAGING}" -name "*.dtb" | sort | xargs mkdtimg create "${DIST_DIR}/dtb.img" --page_size=${DTB_PAGE_SIZE:-4096}
+            find "${DTB_STAGING}" -name "*.dtb" | sort | xargs cat > "${DIST_DIR}/dtb.img"
+          fi
+        elif [[ -f "${PREBUILTS}/dtb" ]]; then
           echo "Using dtb from prebuilts."
           cp "${PREBUILTS}/dtb" "${DIST_DIR}/dtb.img"
         else
           echo "WARNING: dtb not found from prebuilts" >&2
-          if [[ -d "${OUT}/dtb_staging" ]]; then
-            find "${OUT}/dtb_staging" -name "*.dtb" | sort | xargs mkdtimg create "${DIST_DIR}/dtb.img" --page_size=${DTB_PAGE_SIZE:-4096}
-          else
-            echo "WARNING: dtb_staging dir not found" >&2
-          fi
+          echo "WARNING: dtb merge cmds is not defined in build config" >&2
+          echo "WARNING: vendor_boot might be unbootable!!!" >&2
         fi
 
-        if [[ -d "${OUT}/dtb_staging" ]]; then
-          tar -czf "${DIST_DIR}/dtb_staging_archive.tar.gz" -C "${OUT}/dtb_staging" .
+        if [[ -d "${DTB_STAGING}" ]]; then
+          tar -czf "${DIST_DIR}/dtb_staging_archive.tar.gz" -C "${DTB_STAGING}" .
         fi
 
     - name: Create boot image
